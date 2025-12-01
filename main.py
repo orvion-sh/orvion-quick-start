@@ -334,6 +334,71 @@ async def proxy_facilitator_confirm(request: Request):
 
 
 # ==========================================================================
+# Demo UI State Endpoint (for automatic payment verification UI)
+# ==========================================================================
+
+@app.get("/api/demo/charges/{transaction_id}/ui-state")
+async def proxy_demo_ui_state(transaction_id: str):
+    """
+    Proxy to get UI state for a charge transaction.
+    
+    This endpoint is for the demo UI to poll for automatic updates.
+    It aggregates transaction status and verification into a single response.
+    
+    Response:
+    {
+        "transaction_id": "txn_abc123",
+        "status": "pending",           // pending | succeeded | failed
+        "verified": false,             // result of verify_charge() if succeeded
+        "verified_at": null,
+        "content_unlocked": false,     // status=succeeded && verified=true
+        "amount": "1.00",
+        "currency": "USDC",
+        "raw": {
+            "meshpay_status": "pending",
+            "meshpay_verified_reason": null
+        }
+    }
+    
+    Poll every 2-3 seconds while status is "pending".
+    Stop polling when status is "succeeded" or "failed".
+    """
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            headers = {
+                "Authorization": f"Bearer {MESHPAY_API_KEY}",
+            }
+            
+            response = await client.get(
+                f"{BACKEND_URL}/v1/demo/charges/{transaction_id}/ui-state",
+                headers=headers,
+            )
+            
+            try:
+                response_data = response.json()
+            except Exception:
+                response_data = {"error": "Invalid JSON response from backend"}
+            
+            return JSONResponse(content=response_data, status_code=response.status_code)
+            
+        except httpx.ConnectError:
+            return JSONResponse(
+                content={"error": "backend_unreachable", "detail": "Connection to backend failed"},
+                status_code=502,
+            )
+        except httpx.TimeoutException:
+            return JSONResponse(
+                content={"error": "backend_timeout", "detail": "Backend request timed out"},
+                status_code=504,
+            )
+        except Exception as e:
+            return JSONResponse(
+                content={"error": "proxy_error", "detail": str(e)},
+                status_code=502,
+            )
+
+
+# ==========================================================================
 # Charge Verification Endpoint (for seller-side verification)
 # ==========================================================================
 

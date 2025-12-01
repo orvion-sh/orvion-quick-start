@@ -21,6 +21,9 @@ const transactionLog = [];
 let currentCharge = null;
 let currentMonitorId = null;
 
+// UI State polling handle (for cleanup)
+let currentPollingInterval = null;
+
 // Wallet state
 let connectedWallet = null;
 let walletPublicKey = null;
@@ -582,15 +585,29 @@ function showPaymentPanel(chargeData) {
         );
     }
     
+    // Hide content unlocked section (reset state)
+    hideContentUnlocked();
+    
     // Show panel
     elements.paymentPanel.style.display = 'block';
+    
+    // Start automatic UI state polling
+    // This removes the need for manual "Verify Payment" clicks
+    // The UI will automatically update when payment status changes
+    startUIStatePolling(chargeData.id, handleUIStateUpdate);
 }
 
 function hidePaymentPanel() {
     elements.paymentPanel.style.display = 'none';
     currentCharge = null;
     currentMonitorId = null;
+    
+    // Stop any active polling
+    stopUIStatePolling();
+    
+    // Hide related sections
     hideVerificationSection();
+    hideContentUnlocked();
 }
 
 function updatePaymentStatus(status) {
@@ -1071,13 +1088,19 @@ async function payWithWallet() {
         });
         
         // Check if SPL Token library is available
-        // The CDN version might expose it as splToken, spl, or @solana/spl-token
-        const splTokenLib = window.splToken || window.spl || (typeof splToken !== 'undefined' ? splToken : null);
+        // The IIFE version exposes it as window.splToken
+        const splTokenLib = window.splToken;
         
-        if (!splTokenLib) {
+        console.log('SPL Token library check:', {
+            'window.splToken': typeof window.splToken,
+            'has getAssociatedTokenAddress': splTokenLib?.getAssociatedTokenAddress ? 'yes' : 'no',
+            'has createTransferInstruction': splTokenLib?.createTransferInstruction ? 'yes' : 'no'
+        });
+        
+        if (!splTokenLib || !splTokenLib.getAssociatedTokenAddress) {
             // Fallback: Use memo transaction if SPL Token not loaded
-            console.warn('SPL Token library not loaded, using memo transaction for demo');
-            console.log('Available globals:', Object.keys(window).filter(k => k.toLowerCase().includes('spl')));
+            console.warn('SPL Token library not loaded or incomplete, using memo transaction for demo');
+            console.log('Available globals with "spl":', Object.keys(window).filter(k => k.toLowerCase().includes('spl')));
             const memoProgram = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
             const memoText = `Meshpay charge: ${currentCharge.id}, Amount: ${amount} ${currentCharge.currency}`;
             const memoData = new TextEncoder().encode(memoText);
@@ -1286,6 +1309,148 @@ async function payWithWallet() {
         } else {
             elements.payWithWalletBtn.innerHTML = '<span class="btn-icon">🔌</span> Connect Wallet & Pay';
         }
+    }
+}
+
+// ==========================================================================
+// UI State Polling (Automatic payment status updates)
+// ==========================================================================
+
+/**
+ * Start polling the UI state endpoint for automatic updates.
+ * This is the Meshpay-owned mechanism that removes the need for
+ * sellers to implement their own polling/refresh logic.
+ * 
+ * @param {string} transactionId - The transaction ID to poll
+ * @param {function} onUpdate - Callback when state changes
+ * @returns {number} The interval ID (for cleanup)
+ */
+function startUIStatePolling(transactionId, onUpdate) {
+    // Clear any existing polling
+    stopUIStatePolling();
+    
+    console.log('Starting UI state polling for:', transactionId);
+    
+    currentPollingInterval = setInterval(async () => {
+        try {
+            const res = await fetch(`/api/demo/charges/${transactionId}/ui-state`);
+            
+            if (!res.ok) {
+                console.warn('UI state poll failed:', res.status);
+                return;
+            }
+            
+            const state = await res.json();
+            console.log('UI state update:', state.status, state.verified, state.content_unlocked);
+            
+            // Call the update callback
+            onUpdate(state);
+            
+            // Stop polling when we reach a terminal state
+            if (state.status === 'succeeded' || state.status === 'failed') {
+                console.log('Stopping polling - terminal state reached:', state.status);
+                stopUIStatePolling();
+            }
+        } catch (error) {
+            console.error('UI state polling error:', error);
+        }
+    }, 2500); // Poll every 2.5 seconds
+    
+    return currentPollingInterval;
+}
+
+/**
+ * Stop UI state polling and clean up the interval.
+ */
+function stopUIStatePolling() {
+    if (currentPollingInterval) {
+        clearInterval(currentPollingInterval);
+        currentPollingInterval = null;
+        console.log('UI state polling stopped');
+    }
+}
+
+/**
+ * Handle UI state updates from polling.
+ * This automatically updates the payment panel and shows content when verified.
+ * 
+ * @param {object} state - The UI state from the backend
+ */
+function handleUIStateUpdate(state) {
+    // Update payment status display
+    updatePaymentStatus(state.status);
+    
+    // Update the current charge state
+    if (currentCharge) {
+        currentCharge.status = state.status;
+    }
+    
+    // If content is unlocked (payment verified), show the unlocked state
+    if (state.content_unlocked) {
+        // Show verification section with auto-verified result
+        showVerificationSection();
+        showVerificationResult('verified', {
+            verified: true,
+            status: state.status,
+            transaction_id: state.transaction_id,
+            amount: state.amount,
+            currency: state.currency,
+            content_unlocked: state.content_unlocked
+        });
+        
+        // Show the content unlocked section
+        showContentUnlocked(state);
+        
+        // Update payment message
+        setPaymentMessage('🎉 Payment verified! Content is now unlocked.', 'success');
+        
+        // Disable payment buttons since we're done
+        elements.payWithWalletBtn.disabled = true;
+        elements.startMonitorBtn.disabled = true;
+        elements.simulatePaymentBtn.disabled = true;
+    } else if (state.status === 'succeeded' && !state.verified) {
+        // Payment succeeded but verification failed (rare edge case)
+        showVerificationSection();
+        showVerificationResult('not-verified', {
+            verified: false,
+            reason: state.raw?.meshpay_verified_reason || 'verification_failed',
+            detail: 'Payment succeeded but verification failed',
+            ...state
+        });
+    } else if (state.status === 'failed') {
+        // Payment failed
+        setPaymentMessage('❌ Payment failed.', 'error');
+        hideContentUnlocked();
+    }
+    // For 'pending' status, we just update the status display and keep polling
+}
+
+/**
+ * Show the "Content Unlocked" section with fake paid content.
+ * 
+ * @param {object} state - The UI state
+ */
+function showContentUnlocked(state) {
+    const section = document.getElementById('content-unlocked-section');
+    if (section) {
+        section.style.display = 'block';
+        
+        // Update the content details
+        const amountEl = document.getElementById('unlocked-amount');
+        const txnEl = document.getElementById('unlocked-txn-id');
+        
+        if (amountEl) amountEl.textContent = `${state.amount} ${state.currency}`;
+        if (txnEl) txnEl.textContent = state.transaction_id;
+    }
+}
+
+/**
+ * Hide the "Content Unlocked" section.
+ */
+function hideContentUnlocked() {
+    const section = document.getElementById('content-unlocked-section');
+    if (section) {
+        section.style.display = 'none';
     }
 }
 

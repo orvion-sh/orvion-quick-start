@@ -1028,3 +1028,178 @@ body {
     }
 }
 
+/* ==========================================================================
+   Content Unlocked Section (shown when payment is verified)
+   ========================================================================== */
+
+.content-unlocked-section {
+    margin-top: var(--space-lg);
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.content-unlocked-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+}
+
+.content-unlocked-header .unlock-icon {
+    font-size: 1.25rem;
+}
+
+.content-unlocked-header .subsection-title {
+    margin-bottom: 0;
+    color: var(--accent-success);
+}
+
+.content-unlocked-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    background: linear-gradient(135deg, rgba(63, 185, 80, 0.2) 0%, rgba(63, 185, 80, 0.1) 100%);
+    border: 1px solid var(--accent-success);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md) var(--space-lg);
+    margin-bottom: var(--space-md);
+}
+
+.content-unlocked-badge .badge-icon {
+    font-size: 1.25rem;
+}
+
+.content-unlocked-badge .badge-text {
+    font-weight: 600;
+    color: var(--accent-success);
+    font-size: 1rem;
+}
+
+.content-unlocked-details {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.content-unlocked-details .detail-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-xs) 0;
+}
+
+.content-unlocked-details .detail-row:not(:last-child) {
+    border-bottom: 1px solid var(--border-secondary);
+    padding-bottom: var(--space-sm);
+    margin-bottom: var(--space-sm);
+}
+
+.content-unlocked-details .detail-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    min-width: 100px;
+}
+
+.content-unlocked-details .detail-value {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    color: var(--accent-success);
+}
+
+.content-unlocked-details .detail-value.txn-id {
+    font-size: 0.75rem;
+    word-break: break-all;
+    color: var(--accent-info);
+}
+
+/* Fake Content Preview */
+.fake-content {
+    background: linear-gradient(135deg, var(--bg-tertiary) 0%, rgba(88, 166, 255, 0.05) 100%);
+    border: 1px dashed var(--accent-primary);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.fake-content-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    background: var(--bg-primary);
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px dashed var(--accent-primary);
+    font-weight: 600;
+    color: var(--accent-primary);
+    font-size: 0.875rem;
+}
+
+.fake-content-header .content-icon {
+    font-size: 1rem;
+}
+
+.fake-content-body {
+    padding: var(--space-md);
+}
+
+.fake-content-body p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-bottom: var(--space-sm);
+    line-height: 1.6;
+}
+
+.fake-content-body p:last-of-type {
+    margin-bottom: var(--space-md);
+}
+
+.fake-content-note {
+    font-style: italic;
+    color: var(--text-muted) !important;
+}
+
+.fake-content-note code {
+    background: var(--bg-primary);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--accent-primary);
+    font-style: normal;
+}
+
+.fake-content-sample {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.fake-content-sample pre {
+    margin: 0;
+    padding: var(--space-md);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    overflow-x: auto;
+}
+
+.fake-content-sample code {
+    background: transparent;
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+}
+

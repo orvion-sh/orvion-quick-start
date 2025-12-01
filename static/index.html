@@ -5,12 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meshpay Charges Playground</title>
     <link rel="stylesheet" href="/static/style.css">
+    <!-- Buffer polyfill for browser (must load first) -->
+    <script src="https://bundle.run/buffer@6.0.3"></script>
+    <script>window.Buffer = window.buffer.Buffer;</script>
     <!-- Solana Web3.js for wallet transactions -->
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <!-- SPL Token library for USDC transfers -->
-    <script src="https://unpkg.com/@solana/spl-token@latest/lib/index.iife.js"></script>
-    <!-- Buffer polyfill for browser -->
-    <script src="https://bundle.run/buffer@6.0.3"></script>
+    <!-- SPL Token library for USDC transfers (uses solanaWeb3 global) -->
+    <script src="https://unpkg.com/@solana/spl-token@0.3.8/lib/index.iife.min.js"></script>
 </head>
 <body>
     <!-- Safety Banner -->
@@ -207,6 +208,50 @@
                         <div id="verification-result" class="verification-result" style="display: none;">
                             <div class="verification-status" id="verification-status"></div>
                             <pre id="verification-response" class="code-block code-small"></pre>
+                        </div>
+                    </div>
+                    
+                    <!-- Content Unlocked Section (shown when payment verified) -->
+                    <div id="content-unlocked-section" class="content-unlocked-section" style="display: none;">
+                        <div class="section-divider"></div>
+                        <div class="content-unlocked-header">
+                            <span class="unlock-icon">🔓</span>
+                            <h3 class="subsection-title">CONTENT UNLOCKED</h3>
+                        </div>
+                        <div class="content-unlocked-badge">
+                            <span class="badge-icon">✨</span>
+                            <span class="badge-text">Payment Verified - Access Granted</span>
+                        </div>
+                        <div class="content-unlocked-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Amount Paid:</span>
+                                <span id="unlocked-amount" class="detail-value">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Transaction:</span>
+                                <span id="unlocked-txn-id" class="detail-value txn-id">-</span>
+                            </div>
+                        </div>
+                        <div class="fake-content">
+                            <div class="fake-content-header">
+                                <span class="content-icon">📄</span>
+                                <span>Premium Content Preview</span>
+                            </div>
+                            <div class="fake-content-body">
+                                <p>This is where your paid content would appear.</p>
+                                <p class="fake-content-note">
+                                    In a real integration, your backend would call <code>POST /v1/charges/verify</code> 
+                                    and return the actual content if <code>verified: true</code>.
+                                </p>
+                                <div class="fake-content-sample">
+                                    <pre><code>// Seller backend pseudocode
+if (meshpay.verify(transaction_id).verified) {
+    return premium_content;
+} else {
+    return 402_payment_required;
+}</code></pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
