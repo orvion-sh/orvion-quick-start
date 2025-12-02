@@ -626,4 +626,3 @@ function stopPolling() {
 // ==========================================================================
 
 document.addEventListener('DOMContentLoaded', init);
-

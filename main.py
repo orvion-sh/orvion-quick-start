@@ -26,7 +26,7 @@ if sdk_path not in sys.path:
     sys.path.insert(0, sdk_path)
 
 from meshpay import MeshpayClient, MeshpayAPIError
-from meshpay.fastapi import MeshpayMiddleware, require_payment
+from meshpay.fastapi import MeshpayMiddleware, require_payment, sync_routes
 
 # Load environment variables
 load_dotenv()
@@ -55,6 +55,38 @@ async def lifespan(app: FastAPI):
             api_key=MESHPAY_API_KEY,
             base_url=BACKEND_URL,
         )
+        
+        # Verify API key organization before registering routes
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                health_response = await client.get(
+                    f"{BACKEND_URL}/v1/health",
+                    headers={"Authorization": f"Bearer {MESHPAY_API_KEY}"},
+                )
+                if health_response.status_code == 200:
+                    health_data = health_response.json()
+                    org_id = health_data.get("organization_id")
+                    print(f"✓ API Key verified - Organization ID: {org_id}")
+                    print(f"  Make sure this matches your dashboard organization!")
+                else:
+                    print(f"⚠ API Key verification failed: HTTP {health_response.status_code}")
+        except Exception as e:
+            print(f"⚠ Could not verify API key: {e}")
+        
+        # Register all protected routes on startup
+        try:
+            registered_count = await sync_routes(app, meshpay_client)
+            if registered_count > 0:
+                print(f"✓ Registered {registered_count} protected route(s) on startup")
+                print(f"  Check your dashboard to see the routes!")
+            else:
+                print("⚠ No routes were registered. Check that endpoints have @require_payment decorator.")
+        except Exception as e:
+            print(f"⚠ Error: Failed to register routes on startup: {e}")
+            print(f"  Error type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
+            print("  Routes will still be registered on first request")
     
     yield
     
@@ -71,11 +103,13 @@ app = FastAPI(
 )
 
 # Add Meshpay middleware for @require_payment decorator support
+# Set register_on_first_request=False since we're registering in lifespan
 if MESHPAY_API_KEY:
     app.add_middleware(
         MeshpayMiddleware,
         api_key=MESHPAY_API_KEY,
         base_url=BACKEND_URL,
+        register_on_first_request=False,  # Already registered in lifespan
     )
 
 
@@ -132,28 +166,30 @@ async def test_connection():
             result["backend"]["error"] = f"Connection error: {str(e)}"
             return JSONResponse(content=result, status_code=200)
         
-        # Test API key
+        # Test API key and get organization info
         try:
-            test_payload = {"currency": "USDC"}
             headers = {
                 "Authorization": f"Bearer {MESHPAY_API_KEY}",
                 "Content-Type": "application/json",
             }
             
-            charge_response = await client.post(
-                f"{BACKEND_URL}/v1/charges",
-                json=test_payload,
+            # Use the health endpoint which requires API key and returns org info
+            health_response = await client.get(
+                f"{BACKEND_URL}/v1/health",
                 headers=headers,
             )
             
-            if charge_response.status_code == 401:
+            if health_response.status_code == 200:
+                health_data = health_response.json()
+                result["backend"]["api_key_valid"] = True
+                result["backend"]["organization_id"] = health_data.get("organization_id")
+                result["backend"]["environment"] = health_data.get("environment")
+            elif health_response.status_code == 401:
                 result["backend"]["api_key_valid"] = False
                 result["backend"]["error"] = "401 Unauthorized - Check MESHPAY_API_KEY in .env"
-            elif charge_response.status_code in (400, 422):
-                result["backend"]["api_key_valid"] = True
             else:
-                result["backend"]["api_key_valid"] = True
-                result["backend"]["note"] = f"Unexpected status {charge_response.status_code}"
+                result["backend"]["api_key_valid"] = None
+                result["backend"]["error"] = f"Unexpected status {health_response.status_code}"
                 
         except Exception as e:
             result["backend"]["api_key_valid"] = None
