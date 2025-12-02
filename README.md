@@ -1,205 +1,129 @@
-# Meshpay Charges Playground
+# Meshpay x402 Demo
 
-A standalone demo playground for testing the Meshpay `/v1/charges` API endpoint. Perfect for development testing, demos, and sales calls.
+A demo showcasing x402 payment-protected APIs using the Meshpay Python SDK. Features a `/premium` endpoint that requires payment via Phantom wallet on Solana devnet.
 
 ## Features
 
-- **Preset Scenarios** - One-click test cases (small charge, high value, error cases)
-- **Request Inspector** - Real-time view of the request being sent
-- **Copy as cURL** - Generate ready-to-paste terminal commands
-- **Response Inspector** - Color-coded status badges and JSON highlighting
-- **Transaction Log** - Chronological history with latency tracking
-- **Connection Test** - Verify backend connectivity and API key validity
+- **x402 Payment Flow** - Experience HTTP 402 Payment Required in action
+- **Blur Paywall** - Premium content is blurred until payment is made
+- **Phantom Wallet** - Pay with Solana devnet USDC via Phantom
+- **Instant Verification** - Content unlocks automatically after payment
 
 ## Architecture
 
 ```
 Browser (localhost:5001)
     │
-    ▼
-FastAPI Demo Server (port 5001)
-    │  - Serves static files
-    │  - Proxies API calls (API key stays server-side)
-    ▼
-Meshpay Backend (port 8000)
-    │  - /health
-    │  - /v1/charges
+    ├── GET /           → Landing page
+    │
+    └── GET /premium    → Premium article (payment-protected)
+            │
+            ├── GET /api/premium/check
+            │       └── Returns 402 + charge info OR 200 + access granted
+            │
+            └── POST /api/premium/verify
+                    └── Verifies payment and grants access
 ```
-
-The demo server acts as a proxy, keeping your API key secure on the server side.
 
 ## Quick Start
 
-### 1. Start the Backend First
+### 1. Start the Backend
 
-The demo requires the Meshpay backend to be running on port 8000:
+The demo requires the Meshpay backend running on port 8000:
 
 ```bash
-# From the project root
 cd backend
 uvicorn app.main:app --reload --port 8000
 ```
 
-Keep this terminal running. The backend must be running before starting the demo.
-
-### 2. Install Dependencies
-
-In a new terminal:
+### 2. Configure Environment
 
 ```bash
 cd demo
-pip install -r requirements.txt
-```
-
-### 3. Configure Environment
-
-```bash
 cp .env.example .env
 ```
 
-Edit `.env` and add your Meshpay API key:
+Edit `.env` with your API key:
 
 ```env
 MESHPAY_API_KEY=your_api_key_here
 BACKEND_URL=http://localhost:8000
+DEMO_CUSTOMER_EMAIL=ekinburakozturk+demo@gmail.com
 ```
 
-**Important:** Get your API key from the Meshpay dashboard: Settings → API Keys
-
-### 4. Start the Demo Server
+### 3. Start the Demo
 
 ```bash
 cd demo
+pip install -r requirements.txt
 python main.py
 ```
 
-Or with uvicorn directly:
-
-```bash
-uvicorn main:app --reload --port 5001
-```
-
-The demo server will start on port 5001.
-
-### 5. Open the Playground
+### 4. Open the Demo
 
 Navigate to [http://localhost:5001](http://localhost:5001)
 
-You should see:
-- ✅ Test Connection button to verify backend connectivity and API key
-- Preset scenarios for quick testing
-- Charge form for manual charge creation
-- Request/Response inspectors showing exactly what's being sent/received
-- Transaction log with request history
+1. Click **"Try Premium Content"** to go to the premium article
+2. You'll see blurred content with a paywall overlay
+3. Connect your Phantom wallet (Solana devnet)
+4. Click **"Pay Now"** to make the $0.01 USDC payment
+5. Content unlocks automatically after verification
 
-## How to Start (Quick Reference)
+## Demo Flow
 
-**Prerequisites:**
-1. Backend running on port 8000
-2. `.env` file configured with `MESHPAY_API_KEY`
+### Landing Page (`/`)
 
-**Start command:**
-```bash
-cd demo
-python main.py
-```
+Minimal page with:
+- Meshpay logo and tagline
+- "Try Premium Content" CTA button
+- Demo account info
 
-**Access:**
-- Demo playground: http://localhost:5001
-- Backend API: http://localhost:8000
+### Premium Page (`/premium`)
 
-## Usage
+**Locked State:**
+- Article content is blurred
+- Paywall overlay shows price ($0.01 USDC)
+- Phantom wallet connect button
 
-### Testing Connection
+**Unlocked State:**
+- Full article content visible
+- "Payment Verified" badge
+- Technical details panel (collapsible)
 
-Click **Test Connection** to verify:
-- Demo server is running
-- Backend is reachable
-- API key is valid
+## Getting Devnet SOL
 
-### Using Presets
+This demo uses Solana devnet. To pay:
 
-Click any preset button to pre-fill the form:
+1. Install [Phantom Wallet](https://phantom.app/)
+2. Switch to Devnet in Settings → Developer Settings
+3. Get free SOL at [faucet.solana.com](https://faucet.solana.com/)
 
-| Preset | Purpose |
-|--------|---------|
-| Small $1 | Quick sanity check |
-| Medium $50 | Typical use case |
-| High $1000 | Large transaction test |
-| With Metadata | Full payload with customer_ref, reference, metadata |
-| ❌ Missing Amount | 400 error demo |
-| ❌ Bad Currency | Validation error demo |
-| ❌ Zero Amount | amount > 0 error demo |
-
-### Creating Charges
-
-1. Fill in the form (or use a preset)
-2. Click **Create Charge**
-3. View the response in the Response panel
-4. Check the Transaction Log for history
-
-### Copying as cURL
-
-Click **Copy as cURL** to get a ready-to-paste command:
-
-```bash
-curl -X POST "http://localhost:8000/v1/charges" \
-  -H "Authorization: Bearer <your-api-key>" \
-  -H "Content-Type: application/json" \
-  -d '{"amount":10,"currency":"USD"}'
-```
-
-## API Endpoints (Demo Server)
+## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | Serve playground UI |
-| `/health` | GET | Demo server health check |
-| `/api/config` | GET | Get backend URL (no secrets) |
-| `/api/test-connection` | GET | Test backend + API key |
-| `/api/charges` | POST | Proxy to `/v1/charges` |
+| `/` | GET | Landing page |
+| `/premium` | GET | Premium article page |
+| `/api/config` | GET | Public configuration |
+| `/api/premium/check` | GET | Check access (returns 402 or 200) |
+| `/api/premium/verify` | POST | Verify payment |
+| `/api/facilitator/confirm` | POST | Confirm wallet payment |
 
-## Development
-
-### Project Structure
+## Files
 
 ```
 demo/
-├── main.py              # FastAPI server
+├── main.py              # FastAPI server with SDK integration
 ├── requirements.txt     # Python dependencies
 ├── .env.example         # Environment template
-├── .env                 # Your configuration (git-ignored)
 ├── static/
-│   ├── index.html       # Playground UI
-│   ├── style.css        # Dark theme styling
-│   └── script.js        # Frontend logic
-└── README.md            # This file
+│   ├── index.html       # Landing page
+│   ├── premium.html     # Premium article page
+│   ├── premium.js       # Payment flow logic
+│   └── style.css        # Light theme styles
+└── README.md
 ```
-
-### Running with Hot Reload
-
-```bash
-uvicorn main:app --reload --port 5001
-```
-
-## Troubleshooting
-
-### "Backend unreachable"
-
-- Ensure the Meshpay backend is running on the configured port
-- Check `BACKEND_URL` in your `.env` file
-
-### "API key invalid"
-
-- Verify `MESHPAY_API_KEY` in your `.env` file
-- Ensure the API key has permissions for the `/v1/charges` endpoint
-
-### "Demo server error"
-
-- Check if port 5001 is available
-- Verify all dependencies are installed
 
 ## License
 
 Internal tool - Meshpay
-

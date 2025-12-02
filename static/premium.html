@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Content - Meshpay Demo</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Buffer polyfill for browser -->
+    <script src="https://bundle.run/buffer@6.0.3"></script>
+    <script>window.Buffer = window.buffer.Buffer;</script>
+    <!-- Solana Web3.js for wallet transactions -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <!-- SPL Token library for USDC transfers -->
+    <script src="https://unpkg.com/@solana/spl-token@0.3.8/lib/index.iife.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="light-theme">
+    <!-- Header -->
+    <header class="demo-header">
+        <div class="header-left">
+            <a href="/" class="logo-link">
+                <span class="logo-text">MESHPAY</span>
+                <span class="logo-badge">DEMO</span>
+            </a>
+        </div>
+        <div class="header-right">
+            <div class="user-info">
+                <span class="user-icon">👤</span>
+                <span id="demo-email" class="user-email">Loading...</span>
+            </div>
+            <div class="wallet-section">
+                <div id="wallet-disconnected" class="wallet-status">
+                    <button id="connect-wallet-btn" class="btn btn-wallet">
+                        <img src="https://phantom.app/img/phantom-icon-purple.svg" alt="Phantom" class="wallet-icon" onerror="this.style.display='none'">
+                        Connect Wallet
+                    </button>
+                </div>
+                <div id="wallet-connected" class="wallet-status" style="display: none;">
+                    <span class="wallet-badge connected">
+                        <span class="wallet-indicator">●</span>
+                        <span id="wallet-address" class="wallet-address">-</span>
+                    </span>
+                    <button id="disconnect-wallet-btn" class="btn btn-ghost btn-small">
+                        Disconnect
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Split Screen Container -->
+    <div class="split-screen">
+        <!-- Left Panel: Live Experience -->
+        <div class="split-panel experience-panel">
+            <div class="panel-header">
+                <span class="panel-label">🔴 Live Experience</span>
+            </div>
+            
+            <main class="premium-main">
+                <!-- Article Container -->
+                <article class="article-container" id="article-container">
+                    <!-- Article Header -->
+                    <div class="article-header">
+                        <span class="article-category">TECHNOLOGY</span>
+                        <h1 class="article-title">The Future of Micropayments: How x402 is Revolutionizing Web Monetization</h1>
+                        <div class="article-meta">
+                            <span class="publish-date">December 2, 2024 · 8 min read</span>
+                        </div>
+                    </div>
+
+                    <!-- Article Content (will be blurred when locked) -->
+                    <div class="article-content" id="article-content">
+                        <p class="article-lead">
+                            For decades, the web has struggled with monetization. From intrusive ads to subscription fatigue, 
+                            content creators and API providers have searched for a better way. Enter x402 — a protocol that 
+                            leverages the long-dormant HTTP 402 status code to enable instant, programmable payments.
+                        </p>
+
+                        <h2>The Problem with Current Monetization</h2>
+                        <p>
+                            Today's internet economy relies heavily on advertising and subscription models. While these 
+                            approaches work for some, they create significant friction for both creators and consumers.
+                        </p>
+
+                        <h2>How x402 Works</h2>
+                        <p>
+                            The x402 protocol builds on HTTP's native 402 Payment Required status code. When a client 
+                            requests a protected resource without payment, the server responds with a 402 status and 
+                            includes payment requirements in the response body.
+                        </p>
+
+                        <blockquote class="article-quote">
+                            "x402 transforms every API endpoint into a potential revenue stream, without requiring 
+                            user accounts, subscriptions, or payment information storage."
+                        </blockquote>
+
+                        <h2>Real-World Applications</h2>
+                        <p>
+                            The implications extend far beyond simple content paywalls. Consider AI APIs that 
+                            charge per inference, data feeds that bill per query, or premium features that unlock 
+                            instantly upon payment.
+                        </p>
+                    </div>
+                </article>
+
+                <!-- Paywall Overlay (shown when locked) -->
+                <div class="paywall-overlay" id="paywall-overlay">
+                    <div class="paywall-modal">
+                        <div class="paywall-icon">🔒</div>
+                        <h2 class="paywall-title">Premium Content</h2>
+                        <p class="paywall-description">
+                            Unlock this article with a one-time micropayment
+                        </p>
+                        <div class="paywall-price">
+                            <span class="price-amount" id="price-amount">$0.01</span>
+                            <span class="price-currency" id="price-currency">USDC</span>
+                        </div>
+                        <div class="paywall-network">
+                            <span class="network-badge">Solana Devnet</span>
+                        </div>
+                        
+                        <button id="pay-btn" class="btn btn-primary btn-large paywall-btn">
+                            <img src="https://phantom.app/img/phantom-icon-purple.svg" alt="" class="btn-icon-img" onerror="this.style.display='none'">
+                            <span id="pay-btn-text">Connect Wallet & Pay</span>
+                        </button>
+                        
+                        <div id="payment-status" class="payment-status"></div>
+                        
+                        <p class="paywall-note">
+                            Demo uses Solana devnet · 
+                            <a href="https://faucet.solana.com/" target="_blank">Get free SOL</a>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Unlocked Badge (shown when paid) -->
+                <div class="unlocked-badge" id="unlocked-badge" style="display: none;">
+                    <div class="badge-content">
+                        <span class="badge-icon">✓</span>
+                        <span class="badge-text">Payment Verified</span>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Right Panel: Code -->
+        <div class="split-panel code-panel">
+            <div class="panel-header">
+                <span class="panel-label">&lt;/&gt; Your Code</span>
+                <span class="panel-badge">3 lines</span>
+            </div>
+            
+            <div class="code-content">
+                <!-- Code Block -->
+                <div class="code-section">
+                    <div class="code-filename">main.py</div>
+                    <pre class="code-block syntax-highlight"><code><span class="code-keyword">from</span> meshpay.fastapi <span class="code-keyword">import</span> (
+    MeshpayMiddleware,
+    require_payment
+)
+
+app.add_middleware(
+    MeshpayMiddleware,
+    api_key=<span class="code-string">os.environ["MESHPAY_API_KEY"]</span>,
+)
+
+<span class="code-decorator">@app.get</span>(<span class="code-string">"/premium"</span>)
+<span class="code-decorator">@require_payment</span>(
+    amount=<span class="code-string">"0.01"</span>,
+    currency=<span class="code-string">"USDC"</span>,
+    name=<span class="code-string">"Premium Article"</span>,
+)
+<span class="code-keyword">async def</span> <span class="code-function">premium</span>(request: Request):
+    <span class="code-keyword">return</span> {<span class="code-string">"content"</span>: <span class="code-string">"unlocked!"</span>}</code></pre>
+                </div>
+
+                <!-- Feature Highlights -->
+                <div class="code-features">
+                    <div class="feature-item">
+                        <span class="feature-check">✓</span>
+                        <span>Auto-registers route in dashboard</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-check">✓</span>
+                        <span>Returns 402 until payment verified</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-check">✓</span>
+                        <span>Dashboard is source of truth for pricing</span>
+                    </div>
+                </div>
+
+                <!-- Technical Details (collapsible) -->
+                <details class="tech-details" id="tech-details">
+                    <summary class="tech-details-toggle">
+                        <span>Show technical details</span>
+                        <span class="toggle-icon">▼</span>
+                    </summary>
+                    <div class="tech-details-content">
+                        <div class="detail-section">
+                            <div class="detail-label">402 Response</div>
+                            <pre class="code-block code-small" id="response-402">{
+  "error": "Payment Required",
+  "amount": "0.01",
+  "currency": "USDC",
+  "x402_requirements": { ... }
+}</pre>
+                        </div>
+                        <div class="detail-section">
+                            <div class="detail-label">After Payment</div>
+                            <pre class="code-block code-small" id="response-200">{
+  "verified": true,
+  "transaction_id": "...",
+  "amount": "0.01"
+}</pre>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="demo-footer">
+        <p>
+            <strong>Meshpay x402 Demo</strong> · 
+            This demo uses Solana devnet — no real money is transferred.
+        </p>
+    </footer>
+
+    <script src="/static/premium.js"></script>
+</body>
+</html>

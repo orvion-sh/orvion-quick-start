@@ -1,56 +1,108 @@
 """
-Meshpay Charges API Demo Playground
+Meshpay x402 Demo - Payment-Protected Content
 
-A standalone demo server that proxies requests to the Meshpay backend,
-keeping API keys secure on the server side.
+A demo server showcasing x402 payment-protected APIs using the Meshpay Python SDK.
+Features a /premium endpoint that requires payment via Phantom wallet on Solana devnet.
+
+This demo showcases two approaches:
+1. @require_payment decorator (recommended) - Auto-registers routes, handles 402 flow
+2. Manual charge creation - For custom payment flows
 """
 
 import os
+import sys
+from contextlib import asynccontextmanager
+from typing import Optional
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, Request, Header
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+
+# Add SDK to path for local development
+sdk_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sdk", "python")
+if sdk_path not in sys.path:
+    sys.path.insert(0, sdk_path)
+
+from meshpay import MeshpayClient, MeshpayAPIError
+from meshpay.fastapi import MeshpayMiddleware, require_payment
 
 # Load environment variables
 load_dotenv()
 
 MESHPAY_API_KEY = os.getenv("MESHPAY_API_KEY", "")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+DEMO_CUSTOMER_EMAIL = os.getenv("DEMO_CUSTOMER_EMAIL", "ekinburakozturk+demo@gmail.com")
+
+# Premium content configuration (used by manual approach)
+PREMIUM_AMOUNT = "0.01"
+PREMIUM_CURRENCY = "USDC"
+PREMIUM_RESOURCE_REF = "demo:premium-article"
+
+# Initialize Meshpay client (global for manual routes)
+meshpay_client: Optional[MeshpayClient] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown."""
+    global meshpay_client
+    
+    # Startup
+    if MESHPAY_API_KEY:
+        meshpay_client = MeshpayClient(
+            api_key=MESHPAY_API_KEY,
+            base_url=BACKEND_URL,
+        )
+    
+    yield
+    
+    # Shutdown
+    if meshpay_client:
+        await meshpay_client.close()
+
 
 app = FastAPI(
-    title="Meshpay Charges Playground",
-    description="Demo playground for testing the Meshpay Charges API",
-    version="1.0.0",
+    title="Meshpay x402 Demo",
+    description="Demo for x402 payment-protected APIs",
+    version="2.0.0",
+    lifespan=lifespan,
 )
 
+# Add Meshpay middleware for @require_payment decorator support
+if MESHPAY_API_KEY:
+    app.add_middleware(
+        MeshpayMiddleware,
+        api_key=MESHPAY_API_KEY,
+        base_url=BACKEND_URL,
+    )
+
+
+# ==========================================================================
+# Health & Config Endpoints
+# ==========================================================================
 
 @app.get("/health")
 async def health():
     """Demo server health check"""
-    return {"status": "healthy", "service": "demo-playground"}
+    return {"status": "healthy", "service": "meshpay-x402-demo"}
 
 
 @app.get("/api/config")
 async def get_config():
-    """
-    Returns public configuration (no secrets).
-    Frontend uses this to display backend URL.
-    """
-    return {"backend_url": BACKEND_URL}
+    """Returns public configuration (no secrets)."""
+    return {
+        "backend_url": BACKEND_URL,
+        "demo_email": DEMO_CUSTOMER_EMAIL,
+        "premium_amount": PREMIUM_AMOUNT,
+        "premium_currency": PREMIUM_CURRENCY,
+    }
 
 
 @app.get("/api/test-connection")
 async def test_connection():
-    """
-    Full connectivity and API key test.
-    
-    1. Checks if backend /health is reachable
-    2. Tests API key by sending an invalid charge request
-       - 401 = API key invalid
-       - 400 = API key valid (validation error expected)
-    """
+    """Test connectivity and API key validity."""
     result = {
         "demo_server": "ok",
         "backend": {
@@ -61,7 +113,6 @@ async def test_connection():
     }
     
     async with httpx.AsyncClient(timeout=10.0) as client:
-        # Step 1: Check backend health
         try:
             health_response = await client.get(f"{BACKEND_URL}/health")
             result["backend"]["reachable"] = True
@@ -81,11 +132,9 @@ async def test_connection():
             result["backend"]["error"] = f"Connection error: {str(e)}"
             return JSONResponse(content=result, status_code=200)
         
-        # Step 2: Test API key with an invalid charge request
-        # We intentionally send a request missing 'amount' to trigger a 400
-        # If we get 401, the API key is invalid
+        # Test API key
         try:
-            test_payload = {"currency": "USDC"}  # Missing required 'amount'
+            test_payload = {"currency": "USDC"}
             headers = {
                 "Authorization": f"Bearer {MESHPAY_API_KEY}",
                 "Content-Type": "application/json",
@@ -100,14 +149,9 @@ async def test_connection():
             if charge_response.status_code == 401:
                 result["backend"]["api_key_valid"] = False
                 result["backend"]["error"] = "401 Unauthorized - Check MESHPAY_API_KEY in .env"
-            elif charge_response.status_code == 400:
-                # 400 means API key is valid, we just got a validation error (expected)
-                result["backend"]["api_key_valid"] = True
-            elif charge_response.status_code == 422:
-                # 422 Unprocessable Entity also means auth passed, validation failed
+            elif charge_response.status_code in (400, 422):
                 result["backend"]["api_key_valid"] = True
             else:
-                # Unexpected status, but auth likely passed
                 result["backend"]["api_key_valid"] = True
                 result["backend"]["note"] = f"Unexpected status {charge_response.status_code}"
                 
@@ -118,186 +162,219 @@ async def test_connection():
     return JSONResponse(content=result, status_code=200)
 
 
-@app.post("/api/charges")
-async def proxy_charges(request: Request):
+# ==========================================================================
+# Premium Content Endpoints (x402 Protected)
+# ==========================================================================
+
+@app.get("/premium")
+async def premium_page():
+    """Serve the premium content page (handles payment state client-side)."""
+    return FileResponse("static/premium.html")
+
+
+# --------------------------------------------------------------------------
+# NEW: Decorator-based approach (recommended)
+# --------------------------------------------------------------------------
+# Path (/api/premium) and method (GET) are automatically inferred from the route.
+# The route is auto-registered in Meshpay on first access.
+# Dashboard configuration takes precedence after initial registration.
+
+@app.get("/api/premium")
+@require_payment(
+    amount="0.01",
+    currency="USDC",
+    name="Premium Article Demo",
+    description="Demo premium article access",
+)
+async def premium_api(request: Request):
     """
-    Proxies charge requests to the Meshpay backend.
+    Premium content endpoint using @require_payment decorator.
     
-    - Adds Authorization header with API key from environment
-    - Forwards request body as-is
-    - Returns backend response with same status code
+    This endpoint automatically:
+    - Auto-registers the route in Meshpay (first request only)
+    - Returns 402 with charge info if no payment
+    - Verifies payment and grants access if X-Transaction-Id header present
+    - Attaches payment info to request.state.payment
     """
-    try:
-        # Get request body
-        body = await request.json()
-    except Exception:
+    # Access payment info from request.state
+    payment = getattr(request.state, "payment", None)
+    
+    return {
+        "access": "granted",
+        "message": "Welcome to premium content!",
+        "payment": {
+            "transaction_id": payment.transaction_id if payment else None,
+            "amount": payment.amount if payment else None,
+            "currency": payment.currency if payment else None,
+        } if payment else None,
+    }
+
+
+# --------------------------------------------------------------------------
+# Manual approach (for custom flows or backward compatibility)
+# --------------------------------------------------------------------------
+
+@app.get("/api/premium/check")
+async def check_premium_access(
+    x_transaction_id: Optional[str] = Header(None, alias="X-Transaction-Id"),
+):
+    """
+    Check if user has access to premium content (manual approach).
+    
+    Returns:
+    - 402 with charge info if no valid transaction
+    - 200 with content access if payment verified
+    """
+    if not meshpay_client:
         return JSONResponse(
-            content={"error": "invalid_json", "detail": "Request body must be valid JSON"},
-            status_code=400,
+            content={"error": "Server misconfigured", "detail": "Meshpay client not initialized"},
+            status_code=500,
         )
     
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    # If transaction ID provided, verify it
+    if x_transaction_id:
         try:
-            headers = {
-                "Authorization": f"Bearer {MESHPAY_API_KEY}",
-                "Content-Type": "application/json",
-            }
-            
-            response = await client.post(
-                f"{BACKEND_URL}/v1/charges",
-                json=body,
-                headers=headers,
+            result = await meshpay_client.verify_charge(
+                transaction_id=x_transaction_id,
+                resource_ref=PREMIUM_RESOURCE_REF,
             )
             
-            # Return backend response 1:1
-            try:
-                response_data = response.json()
-            except Exception:
-                response_data = {"raw_response": response.text, "error": "Invalid JSON response from backend"}
-            
-            # If backend returned an error, log it for debugging
-            if response.status_code >= 400:
-                import structlog
-                logger = structlog.get_logger()
-                logger.error(
-                    "Backend returned error",
-                    status_code=response.status_code,
-                    response=response_data,
-                    request_body=body
+            if result.verified:
+                return JSONResponse(
+                    content={
+                        "access": "granted",
+                        "transaction_id": result.transaction_id,
+                        "amount": result.amount,
+                        "currency": result.currency,
+                        "customer_ref": result.customer_ref,
+                        "verified": True,
+                    },
+                    status_code=200,
                 )
-            
-            # Always return the backend's response exactly as-is
-            # This ensures ValidationError messages (400) are shown to users
-            return JSONResponse(
-                content=response_data,
-                status_code=response.status_code,
-            )
-            
-        except httpx.ConnectError:
-            return JSONResponse(
-                content={
-                    "error": "backend_unreachable",
-                    "detail": "Connection to Meshpay backend failed - Is it running?",
-                },
-                status_code=502,
-            )
-        except httpx.TimeoutException:
-            return JSONResponse(
-                content={
-                    "error": "backend_timeout",
-                    "detail": "Meshpay backend request timed out",
-                },
-                status_code=504,
-            )
-        except Exception as e:
-            return JSONResponse(
-                content={
-                    "error": "proxy_error",
-                    "detail": f"Proxy error: {str(e)}",
-                },
-                status_code=502,
-            )
-
-
-# ==========================================================================
-# Facilitator Endpoints (for payment monitoring)
-# ==========================================================================
-
-@app.post("/api/facilitator/monitor")
-async def proxy_facilitator_monitor(request: Request):
-    """
-    Proxy to register a payment monitor with the facilitator.
-    """
+            else:
+                # Verification failed - create new charge
+                pass
+        except MeshpayAPIError:
+            # Transaction not found or invalid - create new charge
+            pass
+    
+    # No valid transaction - create a charge and return 402
     try:
-        body = await request.json()
-    except Exception:
+        charge = await meshpay_client.create_charge(
+            amount=PREMIUM_AMOUNT,
+            currency=PREMIUM_CURRENCY,
+            customer_ref=DEMO_CUSTOMER_EMAIL,
+            resource_ref=PREMIUM_RESOURCE_REF,
+            description="Premium Article Access",
+        )
+        
         return JSONResponse(
-            content={"error": "invalid_json", "detail": "Request body must be valid JSON"},
-            status_code=400,
+            content={
+                "error": "Payment Required",
+                "charge_id": charge.id,
+                "amount": charge.amount,
+                "currency": charge.currency,
+                "x402_requirements": charge.x402_requirements,
+                "description": "Premium Article Access",
+            },
+            status_code=402,
+        )
+    except MeshpayAPIError as e:
+        return JSONResponse(
+            content={"error": "Failed to create charge", "detail": str(e)},
+            status_code=500,
+        )
+
+
+@app.post("/api/premium/verify")
+async def verify_premium_payment(request: Request):
+    """
+    Verify a payment for premium content.
+    Called after wallet payment to confirm access.
+    """
+    if not meshpay_client:
+        return JSONResponse(
+            content={"error": "Server misconfigured"},
+            status_code=500,
         )
     
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            headers = {
-                "Authorization": f"Bearer {MESHPAY_API_KEY}",
-                "Content-Type": "application/json",
-            }
-            
-            response = await client.post(
-                f"{BACKEND_URL}/v1/facilitator/monitor",
-                json=body,
-                headers=headers,
-            )
-            
-            try:
-                response_data = response.json()
-            except Exception:
-                response_data = {"error": "Invalid JSON response from backend"}
-            
-            return JSONResponse(content=response_data, status_code=response.status_code)
-            
-        except httpx.ConnectError:
+    try:
+        body = await request.json()
+        transaction_id = body.get("transaction_id")
+        
+        if not transaction_id:
             return JSONResponse(
-                content={"error": "backend_unreachable", "detail": "Connection to backend failed"},
-                status_code=502,
+                content={"error": "Missing transaction_id"},
+                status_code=400,
             )
-        except httpx.TimeoutException:
+        
+        result = await meshpay_client.verify_charge(
+            transaction_id=transaction_id,
+            resource_ref=PREMIUM_RESOURCE_REF,
+        )
+        
+        if result.verified:
             return JSONResponse(
-                content={"error": "backend_timeout", "detail": "Backend request timed out"},
-                status_code=504,
+                content={
+                    "verified": True,
+                    "transaction_id": result.transaction_id,
+                    "amount": result.amount,
+                    "currency": result.currency,
+                    "customer_ref": result.customer_ref,
+                },
+                status_code=200,
             )
-        except Exception as e:
+        else:
             return JSONResponse(
-                content={"error": "proxy_error", "detail": str(e)},
-                status_code=502,
+                content={
+                    "verified": False,
+                    "reason": result.reason or "Payment not completed",
+                },
+                status_code=402,
             )
+    except MeshpayAPIError as e:
+        return JSONResponse(
+            content={"error": "Verification failed", "detail": str(e)},
+            status_code=500,
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"error": "Invalid request", "detail": str(e)},
+            status_code=400,
+        )
 
 
-@app.get("/api/facilitator/monitor/{monitor_id}")
-async def proxy_facilitator_status(monitor_id: str):
-    """
-    Proxy to check payment monitor status.
-    """
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            headers = {
-                "Authorization": f"Bearer {MESHPAY_API_KEY}",
-            }
-            
-            response = await client.get(
-                f"{BACKEND_URL}/v1/facilitator/monitor/{monitor_id}",
-                headers=headers,
-            )
-            
-            try:
-                response_data = response.json()
-            except Exception:
-                response_data = {"error": "Invalid JSON response from backend"}
-            
-            return JSONResponse(content=response_data, status_code=response.status_code)
-            
-        except httpx.ConnectError:
-            return JSONResponse(
-                content={"error": "backend_unreachable", "detail": "Connection to backend failed"},
-                status_code=502,
-            )
-        except Exception as e:
-            return JSONResponse(
-                content={"error": "proxy_error", "detail": str(e)},
-                status_code=502,
-            )
-
+# ==========================================================================
+# Proxy Endpoints (for payment confirmation)
+# ==========================================================================
 
 @app.post("/api/facilitator/confirm")
 async def proxy_facilitator_confirm(request: Request):
-    """
-    Proxy to manually confirm a payment (for testing/demo).
-    """
+    """Proxy to manually confirm a payment (for wallet payments)."""
     try:
         body = await request.json()
     except Exception:
         return JSONResponse(
             content={"error": "invalid_json", "detail": "Request body must be valid JSON"},
+            status_code=400,
+        )
+    
+    # Validate request body
+    if not isinstance(body, dict):
+        return JSONResponse(
+            content={"error": "invalid_body", "detail": "Request body must be a JSON object"},
+            status_code=400,
+        )
+    
+    if "transaction_id" not in body or not body.get("transaction_id"):
+        return JSONResponse(
+            content={"error": "missing_transaction_id", "detail": "transaction_id is required"},
+            status_code=400,
+        )
+    
+    if "tx_hash" not in body or not body.get("tx_hash"):
+        return JSONResponse(
+            content={"error": "missing_tx_hash", "detail": "tx_hash is required"},
             status_code=400,
         )
     
@@ -333,36 +410,9 @@ async def proxy_facilitator_confirm(request: Request):
             )
 
 
-# ==========================================================================
-# Demo UI State Endpoint (for automatic payment verification UI)
-# ==========================================================================
-
 @app.get("/api/demo/charges/{transaction_id}/ui-state")
 async def proxy_demo_ui_state(transaction_id: str):
-    """
-    Proxy to get UI state for a charge transaction.
-    
-    This endpoint is for the demo UI to poll for automatic updates.
-    It aggregates transaction status and verification into a single response.
-    
-    Response:
-    {
-        "transaction_id": "txn_abc123",
-        "status": "pending",           // pending | succeeded | failed
-        "verified": false,             // result of verify_charge() if succeeded
-        "verified_at": null,
-        "content_unlocked": false,     // status=succeeded && verified=true
-        "amount": "1.00",
-        "currency": "USDC",
-        "raw": {
-            "meshpay_status": "pending",
-            "meshpay_verified_reason": null
-        }
-    }
-    
-    Poll every 2-3 seconds while status is "pending".
-    Stop polling when status is "succeeded" or "failed".
-    """
+    """Proxy to get UI state for a charge transaction."""
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             headers = {
@@ -386,11 +436,6 @@ async def proxy_demo_ui_state(transaction_id: str):
                 content={"error": "backend_unreachable", "detail": "Connection to backend failed"},
                 status_code=502,
             )
-        except httpx.TimeoutException:
-            return JSONResponse(
-                content={"error": "backend_timeout", "detail": "Backend request timed out"},
-                status_code=504,
-            )
         except Exception as e:
             return JSONResponse(
                 content={"error": "proxy_error", "detail": str(e)},
@@ -399,73 +444,8 @@ async def proxy_demo_ui_state(transaction_id: str):
 
 
 # ==========================================================================
-# Charge Verification Endpoint (for seller-side verification)
+# Static Files & Pages
 # ==========================================================================
-
-@app.post("/api/charges/verify")
-async def proxy_charges_verify(request: Request):
-    """
-    Proxy to verify a charge payment.
-    
-    This endpoint allows sellers to verify that a payment has been completed
-    before showing paid content to users.
-    
-    Request body:
-    {
-        "transaction_id": "txn_abc123",
-        "customer_ref": "user_123",      // optional
-        "resource_ref": "article:42"     // optional
-    }
-    
-    Response codes:
-    - 200: Payment verified (verified: true)
-    - 404: Transaction not found
-    - 409: Verification failed (mismatch or not succeeded)
-    """
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse(
-            content={"error": "invalid_json", "detail": "Request body must be valid JSON"},
-            status_code=400,
-        )
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            headers = {
-                "Authorization": f"Bearer {MESHPAY_API_KEY}",
-                "Content-Type": "application/json",
-            }
-            
-            response = await client.post(
-                f"{BACKEND_URL}/v1/charges/verify",
-                json=body,
-                headers=headers,
-            )
-            
-            try:
-                response_data = response.json()
-            except Exception:
-                response_data = {"error": "Invalid JSON response from backend"}
-            
-            return JSONResponse(content=response_data, status_code=response.status_code)
-            
-        except httpx.ConnectError:
-            return JSONResponse(
-                content={"error": "backend_unreachable", "detail": "Connection to backend failed"},
-                status_code=502,
-            )
-        except httpx.TimeoutException:
-            return JSONResponse(
-                content={"error": "backend_timeout", "detail": "Backend request timed out"},
-                status_code=504,
-            )
-        except Exception as e:
-            return JSONResponse(
-                content={"error": "proxy_error", "detail": str(e)},
-                status_code=502,
-            )
-
 
 # Mount static files (must be after API routes)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -473,11 +453,55 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 async def serve_index():
-    """Serve the main playground HTML page"""
+    """Serve the main landing page"""
     return FileResponse("static/index.html")
+
+
+def kill_port_process(port: int) -> None:
+    """
+    Kill any process running on the specified port.
+    Works on macOS and Linux.
+    """
+    import subprocess
+    import platform
+    
+    try:
+        if platform.system() == "Windows":
+            # Windows: find process using netstat and kill it
+            result = subprocess.run(
+                ["netstat", "-ano"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            for line in result.stdout.split("\n"):
+                if f":{port}" in line and "LISTENING" in line:
+                    parts = line.split()
+                    if len(parts) > 4:
+                        pid = parts[-1]
+                        subprocess.run(["taskkill", "/F", "/PID", pid], check=False)
+        else:
+            # macOS/Linux: use lsof to find and kill process
+            result = subprocess.run(
+                ["lsof", "-ti", f":{port}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.stdout.strip():
+                pids = result.stdout.strip().split("\n")
+                for pid in pids:
+                    if pid:
+                        subprocess.run(["kill", "-9", pid], check=False)
+                        print(f"Killed process {pid} on port {port}")
+    except Exception as e:
+        print(f"Warning: Could not kill process on port {port}: {e}")
 
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Kill any existing process on port 5001
+    kill_port_process(5001)
+    
     uvicorn.run(app, host="0.0.0.0", port=5001)
-

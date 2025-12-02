@@ -3,309 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meshpay Charges Playground</title>
+    <title>Meshpay x402 Demo</title>
     <link rel="stylesheet" href="/static/style.css">
-    <!-- Buffer polyfill for browser (must load first) -->
-    <script src="https://bundle.run/buffer@6.0.3"></script>
-    <script>window.Buffer = window.buffer.Buffer;</script>
-    <!-- Solana Web3.js for wallet transactions -->
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <!-- SPL Token library for USDC transfers (uses solanaWeb3 global) -->
-    <script src="https://unpkg.com/@solana/spl-token@0.3.8/lib/index.iife.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
-<body>
-    <!-- Safety Banner -->
-    <div class="safety-banner">
-        <span class="warning-icon">⚠️</span>
-        Demo Playground – Test charges only. No real money moves here.
+<body class="light-theme landing-page">
+    <main class="landing-main">
+        <div class="landing-content">
+            <!-- Logo -->
+            <div class="landing-logo">
+                <span class="logo-mark">◈</span>
+                <span class="logo-text">MESHPAY</span>
     </div>
 
-    <!-- Header -->
-    <header class="header">
-        <div class="header-content">
-            <h1 class="logo">MESHPAY CHARGES PLAYGROUND</h1>
-            <div class="header-right">
-                <!-- Wallet Connection -->
-                <div class="wallet-section">
-                    <div id="wallet-disconnected" class="wallet-status">
-                        <button id="connect-phantom-btn" class="btn btn-wallet btn-phantom">
-                            <img src="https://phantom.app/img/phantom-icon-purple.svg" alt="Phantom" class="wallet-icon" onerror="this.style.display='none'">
-                            Connect Phantom
-                        </button>
-                    </div>
-                    <div id="wallet-connected" class="wallet-status" style="display: none;">
-                        <span class="wallet-badge">
-                            <span class="wallet-indicator">🟢</span>
-                            <span id="wallet-address" class="wallet-address">-</span>
-                        </span>
-                        <button id="disconnect-wallet-btn" class="btn btn-small btn-ghost">
-                            Disconnect
-                        </button>
-                    </div>
-                </div>
-                <div class="header-divider"></div>
-                <div class="backend-info">
-                    <span class="backend-label">Backend:</span>
-                    <span id="backend-url" class="backend-url">Loading...</span>
-                </div>
-                <button id="test-connection-btn" class="btn btn-secondary">
-                    <span class="btn-icon">🔌</span>
-                    Test Connection
-                </button>
-                <span id="connection-status" class="connection-status"></span>
-            </div>
-        </div>
-    </header>
+            <!-- Tagline -->
+            <h1 class="landing-title">Monetize any API in 3 lines</h1>
+            <p class="landing-subtitle">
+                x402 payment-protected endpoints with instant Solana micropayments. 
+                One decorator. Auto-registration. Dashboard control.
+            </p>
 
-    <main class="main-content">
-        <!-- Presets Section -->
-        <section class="presets-section">
-            <h2 class="section-title">PRESETS</h2>
-            <div class="presets-grid">
-                <div class="presets-row">
-                    <button class="preset-btn preset-success" data-preset="small">
-                        Small $1
-                    </button>
-                    <button class="preset-btn preset-success" data-preset="medium">
-                        Medium $50
-                    </button>
-                    <button class="preset-btn preset-success" data-preset="high">
-                        High $1000
-                    </button>
-                    <button class="preset-btn preset-info" data-preset="metadata">
-                        With Metadata
-                    </button>
+            <!-- CTA Button -->
+            <a href="/premium" class="btn btn-primary btn-xl landing-cta">
+                See It In Action
+                <span class="cta-arrow">→</span>
+            </a>
+
+            <!-- Features -->
+            <div class="landing-features">
+                <div class="feature">
+                    <span class="feature-icon">⚡</span>
+                    <span class="feature-text">Instant payments</span>
                 </div>
-                <div class="presets-row">
-                    <button class="preset-btn preset-error" data-preset="missing-amount">
-                        ❌ Missing Amount
-                    </button>
-                    <button class="preset-btn preset-error" data-preset="bad-currency">
-                        ❌ Bad Currency
-                    </button>
-                    <button class="preset-btn preset-error" data-preset="zero-amount">
-                        ❌ Zero Amount
-                    </button>
+                <div class="feature">
+                    <span class="feature-icon">🔒</span>
+                    <span class="feature-text">402 Protected</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">💰</span>
+                    <span class="feature-text">$0.01 USDC</span>
                 </div>
             </div>
-        </section>
 
-        <!-- Main Grid -->
-        <div class="main-grid">
-            <!-- Left Column: Form + Response -->
-            <div class="left-column">
-                <!-- Charge Form -->
-                <section class="panel charge-form-panel">
-                    <h2 class="panel-title">CHARGE FORM</h2>
-                    <div class="info-banner" id="info-banner" style="display: none;">
-                        <span class="info-icon">ℹ️</span>
-                        <span id="info-banner-text"></span>
+            <!-- Demo Account Info -->
+            <div class="demo-info">
+                <div class="demo-info-row">
+                    <span class="demo-label">Network:</span>
+                    <span class="demo-value">Solana Devnet</span>
                     </div>
-                    <form id="charge-form" class="charge-form">
-                        <div class="form-group">
-                            <label for="amount">Amount</label>
-                            <input type="number" id="amount" name="amount" step="any" min="0" placeholder="0.001">
-                        </div>
-                        <div class="form-group">
-                            <label for="currency">Currency</label>
-                            <select id="currency" name="currency">
-                                <option value="USDC">USDC</option>
-                                <option value="EURC">EURC</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="customer_ref">Customer Ref <span class="optional">(optional)</span></label>
-                            <input type="text" id="customer_ref" name="customer_ref" placeholder="user_123">
-                        </div>
-                        <div class="form-group">
-                            <label for="resource_ref">Resource Ref <span class="optional">(optional)</span></label>
-                            <input type="text" id="resource_ref" name="resource_ref" placeholder="article:42">
-                        </div>
-                        <div class="form-group">
-                            <label for="reference">Reference <span class="optional">(optional)</span></label>
-                            <input type="text" id="reference" name="reference" placeholder="order_456">
-                        </div>
-                        <div class="form-group">
-                            <label for="metadata">Metadata <span class="optional">(optional JSON)</span></label>
-                            <textarea id="metadata" name="metadata" rows="3" placeholder='{"key": "value"}'></textarea>
-                        </div>
-                        <button type="submit" id="submit-btn" class="btn btn-primary btn-large">
-                            <span class="btn-icon">🚀</span>
-                            Create Charge
-                        </button>
-                    </form>
-                </section>
-
-                <!-- Response Panel -->
-                <section class="panel response-panel">
-                    <div class="panel-header">
-                        <h2 class="panel-title">RESPONSE</h2>
-                        <button id="copy-response-btn" class="btn btn-small btn-ghost" disabled>
-                            <span class="btn-icon">📋</span>
-                            Copy
-                        </button>
-                    </div>
-                    <div id="response-status" class="response-status"></div>
-                    <pre id="response-body" class="code-block"><span class="placeholder">Response will appear here...</span></pre>
-                </section>
-
-                <!-- Payment Actions Panel (shown after charge creation) -->
-                <section class="panel payment-panel" id="payment-panel" style="display: none;">
-                    <div class="panel-header">
-                        <h2 class="panel-title">💳 PAYMENT ACTIONS</h2>
-                    </div>
-                    <div class="payment-info">
-                        <div class="payment-detail">
-                            <span class="payment-label">Transaction ID:</span>
-                            <span id="payment-txn-id" class="payment-value">-</span>
-                        </div>
-                        <div class="payment-detail">
-                            <span class="payment-label">Amount:</span>
-                            <span id="payment-amount" class="payment-value">-</span>
-                        </div>
-                        <div class="payment-detail">
-                            <span class="payment-label">Pay To:</span>
-                            <span id="payment-address" class="payment-value address-value">-</span>
-                        </div>
-                        <div class="payment-detail">
-                            <span class="payment-label">Status:</span>
-                            <span id="payment-status" class="payment-value status-pending">pending</span>
-                        </div>
-                    </div>
-                    <div class="payment-actions">
-                        <button id="pay-with-wallet-btn" class="btn btn-success btn-large">
-                            <span class="btn-icon">💰</span>
-                            Pay with Wallet
-                        </button>
-                        <div class="payment-actions-secondary">
-                            <button id="start-monitor-btn" class="btn btn-primary">
-                                <span class="btn-icon">👁️</span>
-                                Start Monitor
-                            </button>
-                            <button id="simulate-payment-btn" class="btn btn-secondary" disabled>
-                                <span class="btn-icon">🧪</span>
-                                Simulate (Test)
-                            </button>
-                            <button id="check-status-btn" class="btn btn-ghost" disabled>
-                                <span class="btn-icon">🔄</span>
-                                Check Status
-                            </button>
-                        </div>
-                    </div>
-                    <div id="payment-message" class="payment-message"></div>
-                    
-                    <!-- Verification Section (shown after payment succeeds) -->
-                    <div id="verification-section" class="verification-section" style="display: none;">
-                        <div class="section-divider"></div>
-                        <h3 class="subsection-title">🔐 SELLER VERIFICATION</h3>
-                        <p class="verification-description">
-                            Test the <code>/v1/charges/verify</code> endpoint that sellers use to verify payments before showing content.
-                        </p>
-                        <button id="verify-payment-btn" class="btn btn-primary">
-                            <span class="btn-icon">✅</span>
-                            Verify Payment
-                        </button>
-                        <div id="verification-result" class="verification-result" style="display: none;">
-                            <div class="verification-status" id="verification-status"></div>
-                            <pre id="verification-response" class="code-block code-small"></pre>
-                        </div>
-                    </div>
-                    
-                    <!-- Content Unlocked Section (shown when payment verified) -->
-                    <div id="content-unlocked-section" class="content-unlocked-section" style="display: none;">
-                        <div class="section-divider"></div>
-                        <div class="content-unlocked-header">
-                            <span class="unlock-icon">🔓</span>
-                            <h3 class="subsection-title">CONTENT UNLOCKED</h3>
-                        </div>
-                        <div class="content-unlocked-badge">
-                            <span class="badge-icon">✨</span>
-                            <span class="badge-text">Payment Verified - Access Granted</span>
-                        </div>
-                        <div class="content-unlocked-details">
-                            <div class="detail-row">
-                                <span class="detail-label">Amount Paid:</span>
-                                <span id="unlocked-amount" class="detail-value">-</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Transaction:</span>
-                                <span id="unlocked-txn-id" class="detail-value txn-id">-</span>
-                            </div>
-                        </div>
-                        <div class="fake-content">
-                            <div class="fake-content-header">
-                                <span class="content-icon">📄</span>
-                                <span>Premium Content Preview</span>
-                            </div>
-                            <div class="fake-content-body">
-                                <p>This is where your paid content would appear.</p>
-                                <p class="fake-content-note">
-                                    In a real integration, your backend would call <code>POST /v1/charges/verify</code> 
-                                    and return the actual content if <code>verified: true</code>.
-                                </p>
-                                <div class="fake-content-sample">
-                                    <pre><code>// Seller backend pseudocode
-if (meshpay.verify(transaction_id).verified) {
-    return premium_content;
-} else {
-    return 402_payment_required;
-}</code></pre>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            </div>
-
-            <!-- Right Column: Request Inspector + Log -->
-            <div class="right-column">
-                <!-- Request Inspector -->
-                <section class="panel request-panel">
-                    <div class="panel-header">
-                        <h2 class="panel-title">REQUEST INSPECTOR</h2>
-                        <button id="copy-curl-btn" class="btn btn-small btn-ghost">
-                            <span class="btn-icon">📋</span>
-                            Copy as cURL
-                        </button>
-                    </div>
-                    <div class="request-info">
-                        <div class="request-method">POST /api/charges</div>
-                        <div class="request-proxy-note">
-                            → Proxied to: <span id="proxy-target">http://localhost:8000</span>/v1/charges
-                        </div>
-                    </div>
-                    <div class="request-section">
-                        <div class="request-section-title">Headers (browser → demo server):</div>
-                        <pre class="code-block code-small">Content-Type: application/json</pre>
-                    </div>
-                    <div class="auth-note">
-                        <span class="info-icon">ℹ️</span>
-                        Authorization header added by demo server when proxying.
-                    </div>
-                    <div class="request-section">
-                        <div class="request-section-title">Body:</div>
-                        <pre id="request-body" class="code-block">{}</pre>
-                    </div>
-                </section>
-
-                <!-- Transaction Log -->
-                <section class="panel log-panel">
-                    <div class="panel-header">
-                        <h2 class="panel-title">TRANSACTION LOG</h2>
-                        <button id="clear-log-btn" class="btn btn-small btn-ghost">
-                            <span class="btn-icon">🗑️</span>
-                            Clear
-                        </button>
-                    </div>
-                    <div id="transaction-log" class="transaction-log">
-                        <div class="log-empty">No transactions yet. Create a charge to see logs.</div>
-                    </div>
-                </section>
             </div>
         </div>
     </main>
 
-    <script src="/static/script.js"></script>
+    <!-- Footer -->
+    <footer class="landing-footer">
+        <p>
+            This demo uses <strong>Solana devnet</strong> — no real money is transferred.
+            <br>
+            Get free devnet SOL at <a href="https://faucet.solana.com/" target="_blank">faucet.solana.com</a>
+        </p>
+        <div class="footer-links">
+            <a href="https://github.com/meshpay" target="_blank">GitHub</a>
+            <span class="divider">·</span>
+            <a href="https://docs.meshpay.com" target="_blank">Documentation</a>
+        </div>
+    </footer>
+
+    <script>
+        // Load config and display demo email
+        async function init() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+                
+                const emailEl = document.getElementById('demo-email');
+                if (emailEl && config.demo_email) {
+                    emailEl.textContent = config.demo_email;
+                }
+            } catch (error) {
+                console.error('Failed to load config:', error);
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
 </body>
 </html>
-
