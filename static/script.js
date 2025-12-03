@@ -1263,6 +1263,16 @@ async function payWithWallet() {
         // Check for user rejection
         if (errorString.includes('user rejected') || errorString.includes('user cancelled')) {
             setPaymentMessage('❌ Transaction cancelled by user', 'warning');
+            
+            // Cancel the transaction on the backend if we have a transaction ID
+            if (currentCharge?.id) {
+                try {
+                    await cancelTransactionOnBackend(currentCharge.id);
+                } catch (cancelError) {
+                    console.error('Failed to cancel transaction on backend:', cancelError);
+                    // Don't show error to user - cancellation is already handled in UI
+                }
+            }
         } 
         // Check for insufficient funds errors
         else if (errorString.includes('insufficient') || 
@@ -1309,6 +1319,38 @@ async function payWithWallet() {
         } else {
             elements.payWithWalletBtn.innerHTML = '<span class="btn-icon">🔌</span> Connect Wallet & Pay';
         }
+    }
+}
+
+// ==========================================================================
+// Transaction Cancellation
+// ==========================================================================
+
+async function cancelTransactionOnBackend(transactionId) {
+    /**
+     * Cancel a transaction on the backend when user cancels from wallet.
+     * This ensures the transaction status is updated to 'cancelled' in the database.
+     */
+    try {
+        // Try to cancel via proxy endpoint (if available)
+        const response = await fetch(`/api/billing/transactions/${transactionId}/cancel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('Transaction cancelled successfully:', result);
+            return result;
+        } else {
+            // If proxy doesn't exist, try direct backend call (may fail without auth)
+            console.warn('Cancel proxy endpoint not available, transaction may remain pending');
+        }
+    } catch (error) {
+        console.error('Error cancelling transaction:', error);
+        // Don't throw - cancellation is best-effort
     }
 }
 

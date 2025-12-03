@@ -95,6 +95,7 @@ async function checkPremiumAccess() {
         if (response.status === 200 && data.access === 'granted') {
             // Access granted - show content
             showUnlockedState(data);
+            currentCharge = null; // Clear charge since access is granted
         } else if (response.status === 402) {
             // Payment required - show paywall
             currentCharge = data;
@@ -103,6 +104,7 @@ async function checkPremiumAccess() {
             // Error
             console.error('Unexpected response:', data);
             showError('Failed to check access status');
+            currentCharge = null; // Clear charge on error
         }
     } catch (error) {
         console.error('Failed to check premium access:', error);
@@ -348,9 +350,23 @@ async function handlePayment() {
         }
     }
     
+    // Refresh charge if not available
     if (!currentCharge) {
         setPaymentStatus('No charge available. Refreshing...', 'info');
+        elements.payBtn.disabled = true;
+        
         await checkPremiumAccess();
+        
+        // After refresh, if we got a charge and wallet is connected, proceed automatically
+        if (currentCharge && walletPublicKey) {
+            // Small delay to let UI update
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await processPayment();
+            return;
+        }
+        
+        // If we still don't have a charge or wallet isn't connected, re-enable button
+        elements.payBtn.disabled = false;
         return;
     }
     
@@ -558,12 +574,77 @@ function handlePaymentError(error) {
     
     if (errorString.includes('user rejected') || errorString.includes('user cancelled')) {
         setPaymentStatus('Transaction cancelled', 'error');
+        
+        // Cancel the transaction on the backend if we have a transaction ID
+        if (currentCharge) {
+            const transactionId = currentCharge.charge_id || currentCharge.id || currentCharge.transaction_id;
+            console.log('User cancelled transaction, currentCharge:', currentCharge);
+            console.log('Extracted transaction ID:', transactionId);
+            
+            if (transactionId) {
+                cancelTransactionOnBackend(transactionId).catch(err => {
+                    console.error('Failed to cancel transaction on backend:', err);
+                    // Don't show error to user - cancellation is already handled in UI
+                });
+            } else {
+                console.warn('Cannot cancel transaction: transaction ID not found in currentCharge');
+            }
+        } else {
+            console.warn('Cannot cancel transaction: currentCharge is null');
+        }
     } else if (errorString.includes('insufficient') || errorString.includes('no record')) {
         setPaymentStatus('Insufficient funds. Get devnet SOL at faucet.solana.com', 'error');
     } else if (errorString.includes('network') || errorString.includes('timeout')) {
         setPaymentStatus('Network error. Please try again.', 'error');
     } else {
         setPaymentStatus(`Payment failed: ${errorMessage}`, 'error');
+    }
+}
+
+// ==========================================================================
+// Transaction Cancellation
+// ==========================================================================
+
+async function cancelTransactionOnBackend(transactionId) {
+    /**
+     * Cancel a transaction on the backend when user cancels from wallet.
+     * This ensures the transaction status is updated to 'cancelled' in the database.
+     */
+    if (!transactionId) {
+        console.warn('Cannot cancel transaction: transaction ID is missing');
+        return;
+    }
+    
+    console.log('Attempting to cancel transaction:', transactionId);
+    
+    try {
+        // Try to cancel via proxy endpoint (if available)
+        const response = await fetch(`/api/billing/transactions/${transactionId}/cancel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('Transaction cancelled successfully:', result);
+            return result;
+        } else {
+            // Log the error response
+            const errorText = await response.text();
+            console.error('Failed to cancel transaction:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorText
+            });
+            
+            // If proxy doesn't exist, try direct backend call (may fail without auth)
+            console.warn('Cancel proxy endpoint returned error, transaction may remain pending');
+        }
+    } catch (error) {
+        console.error('Error cancelling transaction:', error);
+        // Don't throw - cancellation is best-effort
     }
 }
 

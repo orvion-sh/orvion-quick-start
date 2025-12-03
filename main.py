@@ -479,6 +479,40 @@ async def proxy_demo_ui_state(transaction_id: str):
             )
 
 
+@app.post("/api/billing/transactions/{transaction_id}/cancel")
+async def proxy_cancel_billing_transaction(transaction_id: str):
+    """Proxy to cancel a billing transaction (when user cancels from wallet)."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            headers = {
+                "X-API-Key": MESHPAY_API_KEY,
+                "Content-Type": "application/json",
+            }
+            
+            response = await client.post(
+                f"{BACKEND_URL}/v1/billing/transactions/{transaction_id}/cancel",
+                headers=headers,
+            )
+            
+            try:
+                response_data = response.json()
+            except Exception:
+                response_data = {"error": "Invalid JSON response from backend"}
+            
+            return JSONResponse(content=response_data, status_code=response.status_code)
+            
+        except httpx.ConnectError:
+            return JSONResponse(
+                content={"error": "backend_unreachable", "detail": "Connection to backend failed"},
+                status_code=502,
+            )
+        except Exception as e:
+            return JSONResponse(
+                content={"error": "proxy_error", "detail": str(e)},
+                status_code=502,
+            )
+
+
 # ==========================================================================
 # Static Files & Pages
 # ==========================================================================
