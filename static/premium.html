@@ -121,6 +121,24 @@
                             <span class="network-badge">Solana Devnet</span>
                         </div>
                         
+                        <!-- Payment Mode Selector -->
+                        <div class="payment-mode-selector" id="payment-mode-selector">
+                            <div class="mode-option">
+                                <input type="radio" id="mode-402" name="payment-mode" value="402" checked>
+                                <label for="mode-402">
+                                    <strong>402 Mode</strong>
+                                    <span>Pay on this page</span>
+                                </label>
+                            </div>
+                            <div class="mode-option">
+                                <input type="radio" id="mode-hosted" name="payment-mode" value="hosted">
+                                <label for="mode-hosted">
+                                    <strong>Hosted Checkout</strong>
+                                    <span>Redirect to pay.orvion.sh</span>
+                                </label>
+                            </div>
+                        </div>
+                        
                         <button id="pay-btn" class="btn btn-primary btn-large paywall-btn">
                             <img src="https://phantom.app/img/phantom-icon-purple.svg" alt="" class="btn-icon-img" onerror="this.style.display='none'">
                             <span id="pay-btn-text">Connect Wallet & Pay</span>

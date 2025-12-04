@@ -25,13 +25,13 @@ sdk_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sdk", "pyth
 if sdk_path not in sys.path:
     sys.path.insert(0, sdk_path)
 
-from meshpay import MeshpayClient, MeshpayAPIError
-from meshpay.fastapi import MeshpayMiddleware, require_payment, sync_routes
+from orvion import OrvionClient, OrvionAPIError
+from orvion.fastapi import OrvionMiddleware, require_payment, sync_routes
 
 # Load environment variables
 load_dotenv()
 
-MESHPAY_API_KEY = os.getenv("MESHPAY_API_KEY", "")
+ORVION_API_KEY = os.getenv("ORVION_API_KEY") or os.getenv("MESHPAY_API_KEY") or ""
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 DEMO_CUSTOMER_EMAIL = os.getenv("DEMO_CUSTOMER_EMAIL", "ekinburakozturk+demo@gmail.com")
 
@@ -40,19 +40,19 @@ PREMIUM_AMOUNT = "0.01"
 PREMIUM_CURRENCY = "USDC"
 PREMIUM_RESOURCE_REF = "demo:premium-article"
 
-# Initialize Meshpay client (global for manual routes)
-meshpay_client: Optional[MeshpayClient] = None
+# Initialize Orvion client (global for manual routes)
+orvion_client: Optional[OrvionClient] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown."""
-    global meshpay_client
+    global orvion_client
     
     # Startup
-    if MESHPAY_API_KEY:
-        meshpay_client = MeshpayClient(
-            api_key=MESHPAY_API_KEY,
+    if ORVION_API_KEY:
+        orvion_client = OrvionClient(
+            api_key=ORVION_API_KEY,
             base_url=BACKEND_URL,
         )
         
@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
             async with httpx.AsyncClient(timeout=10.0) as client:
                 health_response = await client.get(
                     f"{BACKEND_URL}/v1/health",
-                    headers={"Authorization": f"Bearer {MESHPAY_API_KEY}"},
+                    headers={"Authorization": f"Bearer {ORVION_API_KEY}"},
                 )
                 if health_response.status_code == 200:
                     health_data = health_response.json()
@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
         
         # Register all protected routes on startup
         try:
-            registered_count = await sync_routes(app, meshpay_client)
+            registered_count = await sync_routes(app, orvion_client)
             if registered_count > 0:
                 print(f"✓ Registered {registered_count} protected route(s) on startup")
                 print(f"  Check your dashboard to see the routes!")
@@ -91,8 +91,8 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    if meshpay_client:
-        await meshpay_client.close()
+    if orvion_client:
+        await orvion_client.close()
 
 
 app = FastAPI(
@@ -102,12 +102,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add Meshpay middleware for @require_payment decorator support
+# Add Orvion middleware for @require_payment decorator support
 # Set register_on_first_request=False since we're registering in lifespan
-if MESHPAY_API_KEY:
+if ORVION_API_KEY:
     app.add_middleware(
-        MeshpayMiddleware,
-        api_key=MESHPAY_API_KEY,
+        OrvionMiddleware,
+        api_key=ORVION_API_KEY,
         base_url=BACKEND_URL,
         register_on_first_request=False,  # Already registered in lifespan
     )
@@ -169,7 +169,7 @@ async def test_connection():
         # Test API key and get organization info
         try:
             headers = {
-                "Authorization": f"Bearer {MESHPAY_API_KEY}",
+                "Authorization": f"Bearer {ORVION_API_KEY}",
                 "Content-Type": "application/json",
             }
             
@@ -186,7 +186,7 @@ async def test_connection():
                 result["backend"]["environment"] = health_data.get("environment")
             elif health_response.status_code == 401:
                 result["backend"]["api_key_valid"] = False
-                result["backend"]["error"] = "401 Unauthorized - Check MESHPAY_API_KEY in .env"
+                result["backend"]["error"] = "401 Unauthorized - Check ORVION_API_KEY in .env"
             else:
                 result["backend"]["api_key_valid"] = None
                 result["backend"]["error"] = f"Unexpected status {health_response.status_code}"
@@ -247,31 +247,136 @@ async def premium_api(request: Request):
 
 
 # --------------------------------------------------------------------------
+# NEW: Hosted Checkout approach (redirect to pay.orvion.sh)
+# --------------------------------------------------------------------------
+# Instead of returning 402, this approach redirects unpaid users to Orvion's
+# hosted checkout page. After payment, users are redirected back to this page.
+
+@app.get("/premium-hosted")
+async def premium_hosted_page():
+    """Serve the hosted checkout premium content page."""
+    return FileResponse("static/premium-hosted.html")
+
+
+@app.get("/api/premium/hosted")
+@require_payment(
+    amount="0.01",
+    currency="USDC",
+    name="Premium Article Demo",
+    description="Demo premium article access",
+    hosted_checkout=True,  # Redirect to pay.orvion.sh instead of returning 402
+    return_url="http://localhost:5001/premium",  # Redirect back to premium page after payment
+)
+async def premium_hosted_api(request: Request):
+    """
+    Premium content endpoint using hosted checkout mode.
+    Redirects to pay.orvion.sh for payment, then back to /premium page.
+    
+    This endpoint automatically:
+    - Auto-registers the route in Orvion (first request only)
+    - Redirects to pay.orvion.sh if no payment
+    - After payment, user is redirected back to /premium with ?charge_id=xxx
+    - Verifies payment and grants access
+    - Attaches payment info to request.state.payment
+    
+    Note: This endpoint will redirect to pay.orvion.sh if no payment is found.
+    The redirect happens automatically via the decorator.
+    """
+    # Access payment info from request.state
+    payment = getattr(request.state, "payment", None)
+    
+    # If payment is verified, redirect to premium page with success
+    if payment:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(
+            url=f"/premium?charge_id={payment.transaction_id}&status=succeeded",
+            status_code=302
+        )
+    
+    # This shouldn't be reached if hosted_checkout=True is working correctly
+    # The decorator should redirect to pay.orvion.sh before reaching here
+    # But fallback in case something goes wrong
+    return {
+        "access": "granted",
+        "message": "Welcome to hosted checkout premium content!",
+        "mode": "hosted_checkout",
+        "payment": {
+            "transaction_id": payment.transaction_id if payment else None,
+            "amount": payment.amount if payment else None,
+            "currency": payment.currency if payment else None,
+        } if payment else None,
+    }
+
+
+@app.get("/api/premium-hosted")
+@require_payment(
+    amount="0.01",
+    currency="USDC",
+    name="Premium Hosted Demo",
+    description="Demo premium content with hosted checkout",
+    hosted_checkout=True,  # Redirect to pay.orvion.sh instead of returning 402
+)
+async def premium_hosted_api(request: Request):
+    """
+    Premium content endpoint using hosted checkout mode.
+    
+    This endpoint automatically:
+    - Auto-registers the route in Orvion (first request only)
+    - Redirects to pay.orvion.sh if no payment
+    - After payment, user is redirected back with ?charge_id=xxx
+    - Verifies payment and grants access
+    - Attaches payment info to request.state.payment
+    """
+    # Access payment info from request.state
+    payment = getattr(request.state, "payment", None)
+    
+    return {
+        "access": "granted",
+        "message": "Welcome to hosted checkout premium content!",
+        "mode": "hosted_checkout",
+        "payment": {
+            "transaction_id": payment.transaction_id if payment else None,
+            "amount": payment.amount if payment else None,
+            "currency": payment.currency if payment else None,
+        } if payment else None,
+    }
+
+
+# --------------------------------------------------------------------------
 # Manual approach (for custom flows or backward compatibility)
 # --------------------------------------------------------------------------
 
 @app.get("/api/premium/check")
 async def check_premium_access(
+    request: Request,
     x_transaction_id: Optional[str] = Header(None, alias="X-Transaction-Id"),
+    charge_id: Optional[str] = None,  # Query parameter for hosted checkout return
 ):
     """
     Check if user has access to premium content (manual approach).
+    
+    Supports both:
+    - 402 mode: Uses X-Transaction-Id header
+    - Hosted checkout: Uses charge_id query parameter
     
     Returns:
     - 402 with charge info if no valid transaction
     - 200 with content access if payment verified
     """
-    if not meshpay_client:
+    if not orvion_client:
         return JSONResponse(
             content={"error": "Server misconfigured", "detail": "Meshpay client not initialized"},
             status_code=500,
         )
     
+    # Check query parameter first (for hosted checkout return)
+    transaction_id = charge_id or x_transaction_id
+    
     # If transaction ID provided, verify it
-    if x_transaction_id:
+    if transaction_id:
         try:
-            result = await meshpay_client.verify_charge(
-                transaction_id=x_transaction_id,
+            result = await orvion_client.verify_charge(
+                transaction_id=transaction_id,
                 resource_ref=PREMIUM_RESOURCE_REF,
             )
             
@@ -290,13 +395,13 @@ async def check_premium_access(
             else:
                 # Verification failed - create new charge
                 pass
-        except MeshpayAPIError:
+        except OrvionAPIError:
             # Transaction not found or invalid - create new charge
             pass
     
     # No valid transaction - create a charge and return 402
     try:
-        charge = await meshpay_client.create_charge(
+        charge = await orvion_client.create_charge(
             amount=PREMIUM_AMOUNT,
             currency=PREMIUM_CURRENCY,
             customer_ref=DEMO_CUSTOMER_EMAIL,
@@ -315,7 +420,7 @@ async def check_premium_access(
             },
             status_code=402,
         )
-    except MeshpayAPIError as e:
+    except OrvionAPIError as e:
         return JSONResponse(
             content={"error": "Failed to create charge", "detail": str(e)},
             status_code=500,
@@ -328,7 +433,7 @@ async def verify_premium_payment(request: Request):
     Verify a payment for premium content.
     Called after wallet payment to confirm access.
     """
-    if not meshpay_client:
+    if not orvion_client:
         return JSONResponse(
             content={"error": "Server misconfigured"},
             status_code=500,
@@ -344,7 +449,7 @@ async def verify_premium_payment(request: Request):
                 status_code=400,
             )
         
-        result = await meshpay_client.verify_charge(
+        result = await orvion_client.verify_charge(
             transaction_id=transaction_id,
             resource_ref=PREMIUM_RESOURCE_REF,
         )
@@ -368,7 +473,7 @@ async def verify_premium_payment(request: Request):
                 },
                 status_code=402,
             )
-    except MeshpayAPIError as e:
+    except OrvionAPIError as e:
         return JSONResponse(
             content={"error": "Verification failed", "detail": str(e)},
             status_code=500,
@@ -417,7 +522,7 @@ async def proxy_facilitator_confirm(request: Request):
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             headers = {
-                "Authorization": f"Bearer {MESHPAY_API_KEY}",
+                "Authorization": f"Bearer {ORVION_API_KEY}",
                 "Content-Type": "application/json",
             }
             
@@ -452,7 +557,7 @@ async def proxy_demo_ui_state(transaction_id: str):
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             headers = {
-                "Authorization": f"Bearer {MESHPAY_API_KEY}",
+                "Authorization": f"Bearer {ORVION_API_KEY}",
             }
             
             response = await client.get(
@@ -485,7 +590,7 @@ async def proxy_cancel_billing_transaction(transaction_id: str):
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             headers = {
-                "X-API-Key": MESHPAY_API_KEY,
+                "X-API-Key": ORVION_API_KEY,
                 "Content-Type": "application/json",
             }
             

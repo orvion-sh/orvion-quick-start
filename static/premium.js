@@ -73,6 +73,7 @@ function setupEventListeners() {
     elements.payBtn?.addEventListener('click', handlePayment);
     elements.connectWalletBtn?.addEventListener('click', connectPhantomWallet);
     elements.disconnectWalletBtn?.addEventListener('click', disconnectWallet);
+    setupModeSelector();
 }
 
 // ==========================================================================
@@ -80,6 +81,35 @@ function setupEventListeners() {
 // ==========================================================================
 
 async function checkPremiumAccess() {
+    // Check if user returned from hosted checkout with charge_id
+    const urlParams = new URLSearchParams(window.location.search);
+    const chargeId = urlParams.get('charge_id');
+    const status = urlParams.get('status');
+    
+    // If returning from hosted checkout, verify payment via the API endpoint
+    if (chargeId && status === 'succeeded') {
+        try {
+            // Verify via the API endpoint (which will handle verification)
+            const response = await fetch(`/api/premium/check?charge_id=${chargeId}`, {
+                headers: { 'X-Transaction-Id': chargeId }
+            });
+            const data = await response.json();
+            
+            if (response.status === 200 && data.access === 'granted') {
+                // Store transaction ID for future visits
+                sessionStorage.setItem('premium_txn_id', chargeId);
+                // Clean up URL
+                window.history.replaceState({}, document.title, '/premium');
+                // Show unlocked state
+                showUnlockedState(data);
+                currentCharge = null;
+                return;
+            }
+        } catch (error) {
+            console.error('Failed to verify hosted checkout payment:', error);
+        }
+    }
+    
     // Check if we have a stored transaction ID
     const storedTxnId = sessionStorage.getItem('premium_txn_id');
     
@@ -100,10 +130,17 @@ async function checkPremiumAccess() {
             // Payment required - show paywall
             currentCharge = data;
             showLockedState(data);
+        } else if (response.status === 500) {
+            // Server error - show specific error message
+            const errorMessage = data.detail || data.error || 'Server configuration error';
+            console.error('Server error:', data);
+            showError(`Server error: ${errorMessage}. Please check server configuration.`);
+            currentCharge = null; // Clear charge on error
         } else {
-            // Error
-            console.error('Unexpected response:', data);
-            showError('Failed to check access status');
+            // Other error
+            console.error('Unexpected response:', response.status, data);
+            const errorMessage = data.detail || data.error || 'Unknown error';
+            showError(`Failed to check access status: ${errorMessage}`);
             currentCharge = null; // Clear charge on error
         }
     } catch (error) {
@@ -189,13 +226,30 @@ function setPaymentStatus(message, type = 'info') {
 function updatePayButtonState() {
     if (!elements.payBtn || !elements.payBtnText) return;
     
-    if (walletPublicKey) {
+    // Check which payment mode is selected
+    const modeSelector = document.querySelector('input[name="payment-mode"]:checked');
+    const selectedMode = modeSelector ? modeSelector.value : '402';
+    
+    if (selectedMode === 'hosted') {
+        elements.payBtnText.textContent = 'Go to Checkout';
+        elements.payBtn.classList.remove('wallet-connected');
+    } else if (walletPublicKey) {
         elements.payBtnText.textContent = 'Pay Now';
         elements.payBtn.classList.add('wallet-connected');
     } else {
         elements.payBtnText.textContent = 'Connect Wallet & Pay';
         elements.payBtn.classList.remove('wallet-connected');
     }
+}
+
+// Add event listener for mode selector changes
+function setupModeSelector() {
+    const modeSelectors = document.querySelectorAll('input[name="payment-mode"]');
+    modeSelectors.forEach(radio => {
+        radio.addEventListener('change', () => {
+            updatePayButtonState();
+        });
+    });
 }
 
 // ==========================================================================
@@ -337,7 +391,22 @@ function updateWalletUI(publicKey) {
 // ==========================================================================
 
 async function handlePayment() {
-    // Connect wallet if not connected
+    // Check which payment mode is selected
+    const modeSelector = document.querySelector('input[name="payment-mode"]:checked');
+    const selectedMode = modeSelector ? modeSelector.value : '402';
+    
+    // If hosted checkout mode is selected, redirect to hosted checkout endpoint
+    if (selectedMode === 'hosted') {
+        setPaymentStatus('Redirecting to checkout...', 'info');
+        elements.payBtn.disabled = true;
+        
+        // Redirect to the hosted checkout endpoint
+        // This will redirect to pay.orvion.sh
+        window.location.href = '/api/premium/hosted';
+        return;
+    }
+    
+    // 402 Mode: Connect wallet if not connected
     if (!walletPublicKey || !connectedWallet) {
         setPaymentStatus('Connecting wallet...', 'info');
         elements.payBtn.disabled = true;
