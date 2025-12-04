@@ -62,7 +62,7 @@ async function loadConfig() {
         config = await response.json();
         
         if (elements.demoEmail) {
-            elements.demoEmail.textContent = config.demo_email || 'demo@meshpay.com';
+            elements.demoEmail.textContent = config.demo_email || 'demo@orvion.sh';
         }
     } catch (error) {
         console.error('Failed to load config:', error);
