@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hosted Checkout Demo - Orvion</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="light-theme">
+    <!-- Header -->
+    <header class="demo-header">
+        <div class="header-left">
+            <a href="/" class="logo-link">
+                <span class="logo-text">ORVION</span>
+                <span class="logo-badge">HOSTED</span>
+            </a>
+        </div>
+    </header>
+
+    <main class="premium-main" style="max-width: 900px; margin: 0 auto; padding: 2rem;">
+        <!-- Info Box -->
+        <div class="info-box hosted">
+            <h3>🚀 Hosted Checkout Mode</h3>
+            <p>
+                Instead of returning HTTP 402, this mode redirects unpaid users to Orvion's hosted checkout page (pay.orvion.sh).
+                After payment, users are automatically redirected back to your app.
+            </p>
+        </div>
+
+        <h1>Hosted Checkout Demo</h1>
+        <p style="font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 2rem;">
+            Experience the hosted checkout flow - no wallet integration required on your end!
+        </p>
+
+        <!-- Flow Diagram -->
+        <div class="flow-diagram">
+            <div class="flow-step">
+                <div class="flow-step-icon">🔒</div>
+                <div class="flow-step-label">User visits<br>protected page</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="flow-step-icon">↗️</div>
+                <div class="flow-step-label">Redirect to<br>pay.orvion.sh</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="flow-step-icon">💳</div>
+                <div class="flow-step-label">User pays<br>with wallet</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="flow-step-icon">↩️</div>
+                <div class="flow-step-label">Redirect back<br>to your app</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="flow-step-icon">✅</div>
+                <div class="flow-step-label">Access<br>granted</div>
+            </div>
+        </div>
+
+        <!-- Try It Button -->
+        <div style="text-align: center; margin: 3rem 0;">
+            <a href="/api/premium" class="btn-try">
+                <span>🔐</span>
+                <span>Try Hosted Checkout ($0.01 USDC)</span>
+            </a>
+            <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+                Uses Solana devnet · No real money
+            </p>
+        </div>
+
+        <!-- Code Example -->
+        <h2>Server-Side Code</h2>
+        <div class="code-comparison">
+            <div class="code-box">
+                <div class="code-box-header">x402 Mode (Default)</div>
+                <pre><code><span class="dec">@</span>app.get(<span class="str">"/api/premium"</span>)
+<span class="dec">@</span>require_payment(
+    amount=<span class="str">"0.01"</span>,
+    currency=<span class="str">"USDC"</span>,
+)
+<span class="kw">async def</span> <span class="fn">premium</span>(request):
+    <span class="kw">return</span> {<span class="str">"data"</span>: <span class="str">"premium"</span>}</code></pre>
+            </div>
+            <div class="code-box highlight">
+                <div class="code-box-header">Hosted Checkout Mode ✨</div>
+                <pre><code><span class="dec">@</span>app.get(<span class="str">"/api/premium"</span>)
+<span class="dec">@</span>require_payment(
+    amount=<span class="str">"0.01"</span>,
+    currency=<span class="str">"USDC"</span>,
+    <span class="hl">hosted_checkout=True,</span>
+)
+<span class="kw">async def</span> <span class="fn">premium</span>(request):
+    <span class="kw">return</span> {<span class="str">"data"</span>: <span class="str">"premium"</span>}</code></pre>
+            </div>
+        </div>
+
+        <!-- Benefits -->
+        <h2>Why Hosted Checkout?</h2>
+        <div class="benefits-grid">
+            <div class="benefit-item">
+                <span class="benefit-icon">🎨</span>
+                <div>
+                    <strong>No Wallet UI Required</strong>
+                    <p>Orvion handles wallet connection and payment UI. No need to integrate wallet adapters.</p>
+                </div>
+            </div>
+            <div class="benefit-item">
+                <span class="benefit-icon">🔒</span>
+                <div>
+                    <strong>Secure by Default</strong>
+                    <p>Payment verification happens server-side. Users can't bypass by manipulating the frontend.</p>
+                </div>
+            </div>
+            <div class="benefit-item">
+                <span class="benefit-icon">⚡</span>
+                <div>
+                    <strong>One Line Change</strong>
+                    <p>Just add <code>hosted_checkout=True</code> to your existing @require_payment decorator.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="demo-footer">
+        <p>
+            <strong>Orvion Hosted Checkout Demo</strong> · 
+            This demo uses Solana devnet — no real money is transferred.
+        </p>
+    </footer>
+</body>
+</html>

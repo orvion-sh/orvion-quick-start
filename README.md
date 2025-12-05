@@ -1,129 +1,115 @@
-# Meshpay x402 Demo
+# Orvion Payment Demos
 
-A demo showcasing x402 payment-protected APIs using the Meshpay Python SDK. Features a `/premium` endpoint that requires payment via Phantom wallet on Solana devnet.
+This folder contains two standalone demos showcasing different payment flows with the Orvion SDK.
 
-## Features
+## Demo Options
 
-- **x402 Payment Flow** - Experience HTTP 402 Payment Required in action
-- **Blur Paywall** - Premium content is blurred until payment is made
-- **Phantom Wallet** - Pay with Solana devnet USDC via Phantom
-- **Instant Verification** - Content unlocks automatically after payment
+| Demo | Description | Best For | Port |
+|------|-------------|----------|------|
+| [**x402-mode/**](./x402-mode/) | Native HTTP 402 protocol | APIs, AI agents, custom UX | 5001 |
+| [**hosted-checkout/**](./hosted-checkout/) | Redirect to pay.orvion.sh | Web apps, quick integration | 5002 |
 
-## Architecture
+## Quick Comparison
 
+### x402 Mode (Native Protocol)
 ```
-Browser (localhost:5001)
-    │
-    ├── GET /           → Landing page
-    │
-    └── GET /premium    → Premium article (payment-protected)
-            │
-            ├── GET /api/premium/check
-            │       └── Returns 402 + charge info OR 200 + access granted
-            │
-            └── POST /api/premium/verify
-                    └── Verifies payment and grants access
+Client → Server → HTTP 402 + requirements
+Client → Connects wallet, sends payment on-chain
+Client → Server → Retry with tx_id → Access granted
 ```
+- ✅ Full control over payment UX
+- ✅ AI agents can handle programmatically
+- ✅ Best for API monetization
 
-## Quick Start
+### Hosted Checkout
+```
+Client → Server → Redirect to pay.orvion.sh
+User → Completes payment on hosted page
+pay.orvion.sh → Redirects back to your app
+```
+- ✅ Zero wallet integration code
+- ✅ Orvion handles all payment UI
+- ✅ Best for web applications
 
-### 1. Start the Backend
+## Running the Demos
 
-The demo requires the Meshpay backend running on port 8000:
+### Prerequisites
+- Python 3.9+
+- [Phantom Wallet](https://phantom.app/) (for x402 mode)
+- Free devnet SOL from [faucet.solana.com](https://faucet.solana.com/)
 
+### x402 Mode Demo
 ```bash
-cd backend
-uvicorn app.main:app --reload --port 8000
-```
-
-### 2. Configure Environment
-
-```bash
-cd demo
-cp .env.example .env
-```
-
-Edit `.env` with your API key:
-
-```env
-MESHPAY_API_KEY=your_api_key_here
-BACKEND_URL=http://localhost:8000
-DEMO_CUSTOMER_EMAIL=ekinburakozturk+demo@gmail.com
-```
-
-### 3. Start the Demo
-
-```bash
-cd demo
+cd x402-mode
 pip install -r requirements.txt
-python main.py
+pip install -e ../../sdk/python  # Install SDK from source (required until PyPI release)
+cp .env.example .env             # Add your ORVION_API_KEY
+python main.py                   # http://localhost:5001
 ```
 
-### 4. Open the Demo
-
-Navigate to [http://localhost:5001](http://localhost:5001)
-
-1. Click **"Try Premium Content"** to go to the premium article
-2. You'll see blurred content with a paywall overlay
-3. Connect your Phantom wallet (Solana devnet)
-4. Click **"Pay Now"** to make the $0.01 USDC payment
-5. Content unlocks automatically after verification
-
-## Demo Flow
-
-### Landing Page (`/`)
-
-Minimal page with:
-- Meshpay logo and tagline
-- "Try Premium Content" CTA button
-- Demo account info
-
-### Premium Page (`/premium`)
-
-**Locked State:**
-- Article content is blurred
-- Paywall overlay shows price ($0.01 USDC)
-- Phantom wallet connect button
-
-**Unlocked State:**
-- Full article content visible
-- "Payment Verified" badge
-- Technical details panel (collapsible)
-
-## Getting Devnet SOL
-
-This demo uses Solana devnet. To pay:
-
-1. Install [Phantom Wallet](https://phantom.app/)
-2. Switch to Devnet in Settings → Developer Settings
-3. Get free SOL at [faucet.solana.com](https://faucet.solana.com/)
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Landing page |
-| `/premium` | GET | Premium article page |
-| `/api/config` | GET | Public configuration |
-| `/api/premium/check` | GET | Check access (returns 402 or 200) |
-| `/api/premium/verify` | POST | Verify payment |
-| `/api/facilitator/confirm` | POST | Confirm wallet payment |
-
-## Files
-
-```
-demo/
-├── main.py              # FastAPI server with SDK integration
-├── requirements.txt     # Python dependencies
-├── .env.example         # Environment template
-├── static/
-│   ├── index.html       # Landing page
-│   ├── premium.html     # Premium article page
-│   ├── premium.js       # Payment flow logic
-│   └── style.css        # Light theme styles
-└── README.md
+### Hosted Checkout Demo
+```bash
+cd hosted-checkout
+pip install -r requirements.txt
+pip install -e ../../sdk/python  # Install SDK from source (required until PyPI release)
+cp .env.example .env             # Add your ORVION_API_KEY
+python main.py                   # http://localhost:5002
 ```
 
-## License
+> **Note:** The Orvion SDK is not yet published to PyPI. You must install it from source using `pip install -e ../../sdk/python`. Once published, you'll be able to use `pip install orvion`.
 
-Internal tool - Meshpay
+## Server-Side Code
+
+Both demos use the same `@require_payment` decorator - just one parameter different!
+
+```python
+from orvion.fastapi import OrvionMiddleware, require_payment
+
+# Add middleware (same for both)
+app.add_middleware(OrvionMiddleware, api_key=os.environ["ORVION_API_KEY"])
+
+# x402 Mode (default)
+@app.get("/api/premium")
+@require_payment(amount="0.01", currency="USDC")
+async def premium(request):
+    return {"content": "Premium!"}
+
+# Hosted Checkout Mode
+@app.get("/api/premium")
+@require_payment(amount="0.01", currency="USDC", hosted_checkout=True)
+async def premium(request):
+    return {"content": "Premium!"}
+```
+
+## Network
+
+Both demos use **Solana Devnet** - no real money is transferred.
+
+Get free devnet SOL/USDC at: https://faucet.solana.com/
+
+## Documentation
+
+- [Orvion Docs](https://docs.orvion.sh)
+- [Python SDK](../../sdk/python/)
+- [Node.js SDK](../../sdk/nodejs/)
+
+
+Each Demo is Self-Contained
+
+Users can download just one folder and run it:
+
+x402 Mode (Port 5001):
+
+    cd x402-mode
+    pip install -r requirements.txt
+    pip install -e ../../sdk/python  # Install from source (required)
+    cp .env.example .env
+    python main.py
+
+Hosted Checkout (Port 5002):
+
+    cd hosted-checkout
+    pip install -r requirements.txt
+    pip install -e ../../sdk/python  # Install from source (required)
+    cp .env.example .env
+    python main.py

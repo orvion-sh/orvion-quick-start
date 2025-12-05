@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>x402 Protocol Demo - Orvion</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Buffer polyfill for browser -->
+    <script src="https://bundle.run/buffer@6.0.3"></script>
+    <script>window.Buffer = window.buffer.Buffer;</script>
+    <!-- Solana Web3.js for wallet transactions -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <!-- SPL Token library for USDC transfers -->
+    <script src="https://unpkg.com/@solana/spl-token@0.3.8/lib/index.iife.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="light-theme">
+    <!-- Header -->
+    <header class="demo-header">
+        <div class="header-left">
+            <a href="/" class="logo-link">
+                <span class="logo-text">ORVION</span>
+                <span class="logo-badge">x402</span>
+            </a>
+        </div>
+        <div class="header-right">
+            <div class="wallet-section">
+                <div id="wallet-disconnected" class="wallet-status">
+                    <button id="connect-wallet-btn" class="btn btn-wallet">
+                        <img src="https://phantom.app/img/phantom-icon-purple.svg" alt="Phantom" class="wallet-icon" onerror="this.style.display='none'">
+                        Connect Wallet
+                    </button>
+                </div>
+                <div id="wallet-connected" class="wallet-status" style="display: none;">
+                    <span class="wallet-badge connected">
+                        <span class="wallet-indicator">●</span>
+                        <span id="wallet-address" class="wallet-address">-</span>
+                    </span>
+                    <button id="disconnect-wallet-btn" class="btn btn-ghost btn-small">Disconnect</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="premium-main" style="max-width: 900px; margin: 0 auto; padding: 2rem;">
+        <!-- Success Banner (shown after payment) -->
+        <div id="success-banner" class="success-banner hidden">
+            <span style="font-size: 1.5rem;">✓</span>
+            <div>
+                <strong>Payment Verified!</strong>
+                <p style="margin: 0; opacity: 0.9; font-size: 0.9rem;">Your wallet payment has been confirmed on-chain.</p>
+            </div>
+        </div>
+
+        <!-- Info Box -->
+        <div class="info-box x402">
+            <h3>⚡ x402 Protocol Mode</h3>
+            <p>
+                The native HTTP 402 Payment Required flow. Your server returns a 402 response with payment requirements,
+                and the client handles wallet connection and payment directly on your page.
+            </p>
+        </div>
+
+        <h1>x402 Protocol Demo</h1>
+        <p style="font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 2rem;">
+            Experience the native x402 payment flow - connect your wallet and pay directly on this page!
+        </p>
+
+        <!-- Flow Diagram -->
+        <div class="flow-diagram">
+            <div class="flow-step">
+                <div class="flow-step-icon">📡</div>
+                <div class="flow-step-label">Client requests<br>protected resource</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="flow-step-icon">🔴</div>
+                <div class="flow-step-label">Server returns<br>HTTP 402</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="flow-step-icon">👛</div>
+                <div class="flow-step-label">Client connects<br>wallet & pays</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="flow-step-icon">🔗</div>
+                <div class="flow-step-label">Payment<br>confirmed on-chain</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="flow-step-icon">✅</div>
+                <div class="flow-step-label">Access<br>granted</div>
+            </div>
+        </div>
+
+        <!-- Demo Card -->
+        <div class="demo-card" id="demo-card">
+            <div class="demo-card-icon">🔒</div>
+            <div class="demo-card-title">Premium Content</div>
+            <div class="demo-card-description">Unlock this article with a one-time micropayment</div>
+            <div class="demo-card-price">
+                <span id="price-amount">$0.01</span>
+                <span class="demo-card-price-currency" id="price-currency">USDC</span>
+            </div>
+            <div class="demo-card-network">
+                <span class="network-badge">Solana Devnet</span>
+            </div>
+            
+            <button id="pay-btn" class="btn-pay">
+                <span id="pay-btn-text">Connect Wallet & Pay</span>
+            </button>
+            
+            <div id="payment-status" class="payment-status-box"></div>
+            
+            <p style="margin-top: 1.5rem; color: var(--text-secondary); font-size: 0.85rem;">
+                Demo uses Solana devnet · <a href="https://faucet.solana.com/" target="_blank">Get free SOL</a>
+            </p>
+        </div>
+
+        <!-- Unlocked Content (shown after payment) -->
+        <div id="unlocked-content" style="display: none;">
+            <div class="unlocked-box">
+                <h2 style="color: #10b981; margin-top: 0;">🎉 Content Unlocked!</h2>
+                <p>You now have access to the premium content. In a real application, this would show the full article, API response, or premium feature.</p>
+                <div style="background: var(--bg-secondary); border-radius: 8px; padding: 1rem; margin-top: 1rem;">
+                    <strong>Payment Details:</strong>
+                    <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem; color: var(--text-secondary);">
+                        <li>Transaction ID: <code id="txn-id">-</code></li>
+                        <li>Amount: <span id="paid-amount">0.01</span> USDC</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Code Example -->
+        <h2>Server-Side Code</h2>
+        <div class="code-comparison">
+            <div class="code-box highlight">
+                <div class="code-box-header">x402 Mode (Default) ✨</div>
+                <pre><code><span class="dec">@</span>app.get(<span class="str">"/api/premium"</span>)
+<span class="dec">@</span>require_payment(
+    amount=<span class="str">"0.01"</span>,
+    currency=<span class="str">"USDC"</span>,
+)
+<span class="kw">async def</span> <span class="fn">premium</span>(request):
+    <span class="kw">return</span> {<span class="str">"data"</span>: <span class="str">"premium"</span>}</code></pre>
+            </div>
+            <div class="code-box">
+                <div class="code-box-header">Hosted Checkout Mode</div>
+                <pre><code><span class="dec">@</span>app.get(<span class="str">"/api/premium"</span>)
+<span class="dec">@</span>require_payment(
+    amount=<span class="str">"0.01"</span>,
+    currency=<span class="str">"USDC"</span>,
+    <span class="hl">hosted_checkout=True,</span>
+)
+<span class="kw">async def</span> <span class="fn">premium</span>(request):
+    <span class="kw">return</span> {<span class="str">"data"</span>: <span class="str">"premium"</span>}</code></pre>
+            </div>
+        </div>
+
+        <!-- Benefits -->
+        <h2>Why x402 Protocol?</h2>
+        <div class="benefits-grid">
+            <div class="benefit-item">
+                <span class="benefit-icon">🤖</span>
+                <div>
+                    <strong>Agent-Native Payments</strong>
+                    <p>AI agents can programmatically handle 402 responses and pay for resources automatically.</p>
+                </div>
+            </div>
+            <div class="benefit-item">
+                <span class="benefit-icon">🔌</span>
+                <div>
+                    <strong>Custom Payment UX</strong>
+                    <p>Full control over the payment experience. Build your own wallet UI that matches your brand.</p>
+                </div>
+            </div>
+            <div class="benefit-item">
+                <span class="benefit-icon">📊</span>
+                <div>
+                    <strong>API Monetization</strong>
+                    <p>Perfect for APIs where clients handle payment logic. Charge per-request without subscriptions.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="demo-footer">
+        <p>
+            <strong>Orvion x402 Demo</strong> · 
+            This demo uses Solana devnet — no real money is transferred.
+        </p>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

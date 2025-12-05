@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Content - Orvion</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="light-theme">
+    <!-- Header -->
+    <header class="demo-header">
+        <div class="header-left">
+            <a href="/" class="logo-link">
+                <span class="logo-text">ORVION</span>
+                <span class="logo-badge">HOSTED</span>
+            </a>
+        </div>
+        <div class="header-right">
+            <a href="/" class="btn btn-ghost">← Back to Demo</a>
+        </div>
+    </header>
+
+    <main class="premium-main" style="max-width: 700px; margin: 0 auto; padding: 2rem;">
+        <!-- Success Banner -->
+        <div id="success-banner" class="success-banner">
+            <span style="font-size: 1.5rem;">✓</span>
+            <div>
+                <strong>Payment Successful!</strong>
+                <p style="margin: 0; opacity: 0.9; font-size: 0.9rem;">You've been redirected back after completing payment on pay.orvion.sh</p>
+            </div>
+        </div>
+
+        <!-- Premium Content -->
+        <div class="content-box">
+            <h1>🎉 Premium Content Unlocked!</h1>
+            <p class="lead">
+                Welcome to the premium section. This content is only accessible after completing payment through the hosted checkout flow.
+            </p>
+            
+            <div class="article-content">
+                <h2>The Future of Micropayments</h2>
+                <p>
+                    For decades, the web has struggled with monetization. From intrusive ads to subscription fatigue, 
+                    content creators and API providers have searched for a better way. Enter x402 — a protocol that 
+                    leverages the long-dormant HTTP 402 status code to enable instant, programmable payments.
+                </p>
+                
+                <blockquote>
+                    "x402 transforms every API endpoint into a potential revenue stream, without requiring 
+                    user accounts, subscriptions, or payment information storage."
+                </blockquote>
+                
+                <h2>How It Works</h2>
+                <p>
+                    The x402 protocol builds on HTTP's native 402 Payment Required status code. When a client 
+                    requests a protected resource without payment, the server can either return a 402 status 
+                    (x402 mode) or redirect to a hosted checkout page (like you just experienced).
+                </p>
+                
+                <h2>Real-World Applications</h2>
+                <ul>
+                    <li>AI APIs that charge per inference</li>
+                    <li>Data feeds that bill per query</li>
+                    <li>Premium content that unlocks instantly</li>
+                    <li>Any API that needs pay-per-use monetization</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Payment Details -->
+        <div class="details-box" id="payment-details">
+            <h3>Payment Details</h3>
+            <div class="detail-row">
+                <span>Status</span>
+                <span class="status-badge success">Verified</span>
+            </div>
+            <div class="detail-row">
+                <span>Amount</span>
+                <span>0.01 USDC</span>
+            </div>
+            <div class="detail-row">
+                <span>Network</span>
+                <span>Solana Devnet</span>
+            </div>
+            <div class="detail-row" id="charge-id-row" style="display: none;">
+                <span>Charge ID</span>
+                <code id="charge-id">-</code>
+            </div>
+        </div>
+
+        <!-- Try Again -->
+        <div style="text-align: center; margin-top: 2rem;">
+            <a href="/" class="btn btn-primary">← Back to Demo</a>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="demo-footer">
+        <p>
+            <strong>Orvion Hosted Checkout Demo</strong> · 
+            This demo uses Solana devnet — no real money is transferred.
+        </p>
+    </footer>
+
+    <script>
+        // Extract charge_id from URL if present
+        const urlParams = new URLSearchParams(window.location.search);
+        const chargeId = urlParams.get('charge_id');
+        
+        if (chargeId) {
+            document.getElementById('charge-id').textContent = chargeId.slice(0, 8) + '...';
+            document.getElementById('charge-id-row').style.display = 'flex';
+            
+            // Clean up URL
+            window.history.replaceState({}, document.title, '/premium');
+        }
+    </script>
+</body>
+</html>
