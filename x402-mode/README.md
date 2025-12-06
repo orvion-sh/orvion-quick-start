@@ -94,11 +94,29 @@ x402-mode/
 | `ORVION_API_KEY` | Your Orvion API key | Required |
 | `BACKEND_URL` | Orvion backend URL | `http://localhost:8000` |
 
-## Network
+## Network & Verification
 
 This demo uses **Solana Devnet** - no real money is transferred.
 
-Get free devnet SOL at: https://faucet.solana.com/
+### Payment Verification
+
+Payments are verified using the **Solana Community Facilitator**, which:
+- Verifies transactions directly via Solana RPC
+- Validates amount, recipient, and token (USDC)
+- Extracts payer address from transaction
+- No third-party API keys required
+
+For faster transaction indexing, configure a premium RPC (Helius, QuickNode):
+
+```env
+# In docker/.env or backend/.env
+SOLANA_DEVNET_RPC_URL=https://devnet.helius-rpc.com/?api-key=YOUR_KEY
+```
+
+### Get Devnet Tokens
+
+- **SOL**: https://faucet.solana.com/
+- **USDC**: Use the USDC devnet faucet or mint directly
 
 ## See Also
 

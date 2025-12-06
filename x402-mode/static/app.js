@@ -5,6 +5,64 @@
  */
 
 // =============================================================================
+// SPL Token Constants and Helpers (inline to avoid CDN dependency issues)
+// =============================================================================
+
+const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const ASSOCIATED_TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+
+/**
+ * Derives the associated token account address for a wallet and token mint
+ */
+async function getAssociatedTokenAddress(mint, owner) {
+    const [address] = await solanaWeb3.PublicKey.findProgramAddress(
+        [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+        ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+    return address;
+}
+
+/**
+ * Creates an instruction to create an associated token account
+ */
+function createAssociatedTokenAccountInstruction(payer, associatedToken, owner, mint) {
+    const SYSVAR_RENT_PUBKEY = new solanaWeb3.PublicKey('SysvarRent111111111111111111111111111111111');
+    const keys = [
+        { pubkey: payer, isSigner: true, isWritable: true },
+        { pubkey: associatedToken, isSigner: false, isWritable: true },
+        { pubkey: owner, isSigner: false, isWritable: false },
+        { pubkey: mint, isSigner: false, isWritable: false },
+        { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+    ];
+    return new solanaWeb3.TransactionInstruction({
+        keys,
+        programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+        data: Buffer.alloc(0),
+    });
+}
+
+/**
+ * Creates an instruction to transfer SPL tokens
+ */
+function createTransferInstruction(source, destination, owner, amount) {
+    const keys = [
+        { pubkey: source, isSigner: false, isWritable: true },
+        { pubkey: destination, isSigner: false, isWritable: true },
+        { pubkey: owner, isSigner: true, isWritable: false },
+    ];
+    const data = Buffer.alloc(9);
+    data.writeUInt8(3, 0); // Transfer instruction = 3
+    data.writeBigUInt64LE(BigInt(amount), 1);
+    return new solanaWeb3.TransactionInstruction({
+        keys,
+        programId: TOKEN_PROGRAM_ID,
+        data,
+    });
+}
+
+// =============================================================================
 // State
 // =============================================================================
 
@@ -295,14 +353,23 @@ async function processPayment() {
         const toAddress = new PublicKey(railConfig.pay_to_address);
         const fromAddress = walletPublicKey;
         
-        // USDC on devnet
-        const tokenMint = new PublicKey('Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr');
+        // Official USDC on Solana devnet (Circle)
+        const tokenMint = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
         
-        setPaymentStatus('Please approve in your wallet...', 'info');
+        setPaymentStatus('Checking wallet balance...', 'info');
         
-        // Get/create token accounts
-        const fromTokenAccount = await splToken.getAssociatedTokenAddress(tokenMint, fromAddress);
-        const toTokenAccount = await splToken.getAssociatedTokenAddress(tokenMint, toAddress);
+        // Get/create token accounts using inline helpers
+        const fromTokenAccount = await getAssociatedTokenAddress(tokenMint, fromAddress);
+        const toTokenAccount = await getAssociatedTokenAddress(tokenMint, toAddress);
+        
+        // Check if sender's token account exists
+        const fromAccountInfo = await connection.getAccountInfo(fromTokenAccount);
+        if (!fromAccountInfo) {
+            setPaymentStatus('No USDC found in wallet. Get devnet USDC from a faucet first.', 'error');
+            elements.payBtn.disabled = false;
+            elements.payBtnText.textContent = walletPublicKey ? 'Pay Now' : 'Connect Wallet & Pay';
+            return;
+        }
         
         // Check if recipient token account exists
         const toAccountInfo = await connection.getAccountInfo(toTokenAccount);
@@ -312,7 +379,7 @@ async function processPayment() {
         // Create recipient token account if needed
         if (!toAccountInfo) {
             transaction.add(
-                splToken.createAssociatedTokenAccountInstruction(
+                createAssociatedTokenAccountInstruction(
                     fromAddress, toTokenAccount, toAddress, tokenMint
                 )
             );
@@ -320,8 +387,10 @@ async function processPayment() {
         
         // Add transfer instruction (0.01 USDC = 10000 micro-units with 6 decimals)
         const amount = Math.round(parseFloat(currentCharge.amount) * 1_000_000);
+        
+        setPaymentStatus('Please approve in your wallet...', 'info');
         transaction.add(
-            splToken.createTransferInstruction(
+            createTransferInstruction(
                 fromTokenAccount, toTokenAccount, fromAddress, amount
             )
         );
@@ -351,8 +420,8 @@ async function processPayment() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                charge_id: currentCharge.charge_id,
-                transaction_hash: signature,
+                transaction_id: currentCharge.charge_id,
+                tx_hash: signature,
             }),
         });
         
