@@ -1,6 +1,19 @@
 # Orvion Payment Demos
 
-This folder contains two standalone demos showcasing different payment flows with the Orvion SDK.
+Orvion enables x402 payment-protected APIs with Solana payments. These demos showcase two integration patterns for adding payments to your application.
+
+## Quickstart
+
+```bash
+git clone https://github.com/orvion-sh/quick-start.git
+cd quick-start/x402-mode
+cp .env.example .env
+# Edit .env with your API key from orvion.sh/dashboard
+pip install -r requirements.txt
+python main.py
+```
+
+Then visit `http://localhost:5001` and test the payment flow!
 
 ## Demo Options
 
@@ -8,8 +21,6 @@ This folder contains two standalone demos showcasing different payment flows wit
 |------|-------------|----------|------|
 | [**x402-mode/**](./x402-mode/) | Native HTTP 402 protocol | APIs, AI agents, custom UX | 5001 |
 | [**hosted-checkout/**](./hosted-checkout/) | Redirect to pay.orvion.sh | Web apps, quick integration | 5002 |
-
-## Quick Comparison
 
 ### x402 Mode (Native Protocol)
 ```
@@ -31,32 +42,52 @@ pay.orvion.sh → Redirects back to your app
 - ✅ Orvion handles all payment UI
 - ✅ Best for web applications
 
-## Running the Demos
+## Setup Instructions
 
-### Prerequisites
-- Python 3.9+
-- [Phantom Wallet](https://phantom.app/) (for x402 mode)
-- Free devnet SOL from [faucet.solana.com](https://faucet.solana.com/)
+### 1. Create an Orvion Account
 
-### x402 Mode Demo
+1. Go to [orvion.sh/dashboard](https://orvion.sh/dashboard)
+2. Sign up for a free account
+3. Create an API key in your dashboard
+4. Copy the API key
+
+### 2. Configure the Demo
+
 ```bash
-cd x402-mode
-pip install -r requirements.txt
-pip install -e ../../sdk/python  # Install SDK from source (required until PyPI release)
-cp .env.example .env             # Add your ORVION_API_KEY
-python main.py                   # http://localhost:5001
+# Choose a demo
+cd x402-mode          # or hosted-checkout
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env and add your API key
+# ORVION_API_KEY=your_api_key_here
 ```
 
-### Hosted Checkout Demo
+### 3. Install Dependencies
+
 ```bash
-cd hosted-checkout
 pip install -r requirements.txt
-pip install -e ../../sdk/python  # Install SDK from source (required until PyPI release)
-cp .env.example .env             # Add your ORVION_API_KEY
-python main.py                   # http://localhost:5002
 ```
 
-> **Note:** The Orvion SDK is not yet published to PyPI. You must install it from source using `pip install -e ../../sdk/python`. Once published, you'll be able to use `pip install orvion`.
+This will install:
+- FastAPI and Uvicorn (web framework)
+- The Orvion SDK (`orvion>=0.2.0,<1.0.0`) from PyPI
+
+### 4. Run the Demo
+
+```bash
+python main.py
+```
+
+- x402-mode runs on `http://localhost:5001`
+- hosted-checkout runs on `http://localhost:5002`
+
+### 5. Get Devnet Funds
+
+Both demos use **Solana Devnet** - no real money is transferred.
+
+Get free devnet SOL/USDC at: [faucet.solana.com](https://faucet.solana.com/)
 
 ## Server-Side Code
 
@@ -81,35 +112,12 @@ async def premium(request):
     return {"content": "Premium!"}
 ```
 
-## Network
-
-Both demos use **Solana Devnet** - no real money is transferred.
-
-Get free devnet SOL/USDC at: https://faucet.solana.com/
-
 ## Documentation
 
 - [Orvion Docs](https://docs.orvion.sh)
-- [Python SDK](../../sdk/python/)
-- [Node.js SDK](../../sdk/nodejs/)
+- [Python SDK Documentation](https://docs.orvion.sh/sdk/python)
+- [API Reference](https://docs.orvion.sh/api)
 
+## License
 
-Each Demo is Self-Contained
-
-Users can download just one folder and run it:
-
-x402 Mode (Port 5001):
-
-    cd x402-mode
-    pip install -r requirements.txt
-    pip install -e ../../sdk/python  # Install from source (required)
-    cp .env.example .env
-    python main.py
-
-Hosted Checkout (Port 5002):
-
-    cd hosted-checkout
-    pip install -r requirements.txt
-    pip install -e ../../sdk/python  # Install from source (required)
-    cp .env.example .env
-    python main.py
+MIT

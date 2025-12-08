@@ -18,14 +18,11 @@ This demo showcases the **native HTTP 402 Payment Required** flow, where:
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Install Orvion SDK (from source - required until PyPI release)
-pip install -e ../../sdk/python
-
-# 3. Configure environment
+# 2. Configure environment
 cp .env.example .env
-# Edit .env and add your ORVION_API_KEY
+# Edit .env and add your ORVION_API_KEY from orvion.sh/dashboard
 
-# 4. Run the demo
+# 3. Run the demo
 python main.py
 ```
 

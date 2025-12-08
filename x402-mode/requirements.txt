@@ -3,8 +3,4 @@ fastapi>=0.100.0
 uvicorn>=0.23.0
 python-dotenv>=1.0.0
 httpx>=0.24.0
-
-# Install Orvion SDK:
-# pip install -e ../../sdk/python  # From source (required until PyPI release)
-# 
-# Note: Once published to PyPI, you can use: pip install orvion
+orvion>=0.2.0
