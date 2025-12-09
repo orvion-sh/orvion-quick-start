@@ -44,7 +44,10 @@ load_dotenv()
 ORVION_API_KEY = os.getenv("ORVION_API_KEY", "")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
+# Create single client instance
 orvion_client: Optional[OrvionClient] = None
+if ORVION_API_KEY:
+    orvion_client = OrvionClient(api_key=ORVION_API_KEY, base_url=BACKEND_URL)
 
 
 @asynccontextmanager
@@ -52,9 +55,7 @@ async def lifespan(app: FastAPI):
     """Initialize Orvion client on startup."""
     global orvion_client
 
-    if ORVION_API_KEY:
-        orvion_client = OrvionClient(api_key=ORVION_API_KEY, base_url=BACKEND_URL)
-
+    if orvion_client:
         health = await orvion_client.health_check()
         if health.api_key_valid:
             print(f"✓ API Key verified - Organization: {health.organization_id}")
@@ -83,13 +84,8 @@ app = FastAPI(
 )
 
 # Add Orvion middleware
-if ORVION_API_KEY:
-    app.add_middleware(
-        OrvionMiddleware,
-        api_key=ORVION_API_KEY,
-        base_url=BACKEND_URL,
-        register_on_first_request=False,
-    )
+if orvion_client:
+    app.add_middleware(OrvionMiddleware, client=orvion_client, register_on_first_request=False)
 
 
 # =============================================================================
