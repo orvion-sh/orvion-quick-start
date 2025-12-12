@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,8 +8,11 @@
     <link rel="stylesheet" href="/static/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
 </head>
+
 <body class="light-theme">
     <!-- Header -->
     <header class="demo-header">
@@ -23,9 +27,10 @@
     <main class="premium-main" style="max-width: 900px; margin: 0 auto; padding: 2rem;">
         <!-- Info Box -->
         <div class="info-box hosted">
-            <h3>🚀 Hosted Checkout Mode</h3>
+            <h3>Hosted Checkout Mode</h3>
             <p>
-                Instead of returning HTTP 402, this mode redirects unpaid users to Orvion's hosted checkout page (pay.orvion.sh).
+                Instead of returning HTTP 402, this mode redirects unpaid users to Orvion's hosted checkout page
+                (pay.orvion.sh).
                 After payment, users are automatically redirected back to your app.
             </p>
         </div>
@@ -38,27 +43,27 @@
         <!-- Flow Diagram -->
         <div class="flow-diagram">
             <div class="flow-step">
-                <div class="flow-step-icon">🔒</div>
+                <div class="flow-step-icon">1</div>
                 <div class="flow-step-label">User visits<br>protected page</div>
             </div>
             <div class="flow-arrow">→</div>
             <div class="flow-step">
-                <div class="flow-step-icon">↗️</div>
+                <div class="flow-step-icon">2</div>
                 <div class="flow-step-label">Redirect to<br>pay.orvion.sh</div>
             </div>
             <div class="flow-arrow">→</div>
             <div class="flow-step">
-                <div class="flow-step-icon">💳</div>
+                <div class="flow-step-icon">3</div>
                 <div class="flow-step-label">User pays<br>with wallet</div>
             </div>
             <div class="flow-arrow">→</div>
             <div class="flow-step">
-                <div class="flow-step-icon">↩️</div>
+                <div class="flow-step-icon">4</div>
                 <div class="flow-step-label">Redirect back<br>to your app</div>
             </div>
             <div class="flow-arrow">→</div>
             <div class="flow-step">
-                <div class="flow-step-icon">✅</div>
+                <div class="flow-step-icon">5</div>
                 <div class="flow-step-label">Access<br>granted</div>
             </div>
         </div>
@@ -66,7 +71,7 @@
         <!-- Try It Button -->
         <div style="text-align: center; margin: 3rem 0;">
             <a href="/api/premium" class="btn-try">
-                <span>🔐</span>
+                <span></span>
                 <span>Try Hosted Checkout ($0.01 USDC)</span>
             </a>
             <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
@@ -76,20 +81,21 @@
 
         <!-- Code Example -->
         <h2>Server-Side Code</h2>
-        <div class="code-comparison">
-            <div class="code-box">
-                <div class="code-box-header">x402 Mode (Default)</div>
-                <pre><code><span class="dec">@</span>app.get(<span class="str">"/api/premium"</span>)
-<span class="dec">@</span>require_payment(
-    amount=<span class="str">"0.01"</span>,
-    currency=<span class="str">"USDC"</span>,
-)
-<span class="kw">async def</span> <span class="fn">premium</span>(request):
-    <span class="kw">return</span> {<span class="str">"data"</span>: <span class="str">"premium"</span>}</code></pre>
-            </div>
-            <div class="code-box highlight">
-                <div class="code-box-header">Hosted Checkout Mode ✨</div>
-                <pre><code><span class="dec">@</span>app.get(<span class="str">"/api/premium"</span>)
+
+        <!-- Language Tabs -->
+        <div class="code-tabs">
+            <button class="code-tab active" data-lang="python">Python</button>
+            <button class="code-tab" data-lang="nodejs">Node.js</button>
+        </div>
+
+        <div class="code-panels">
+            <!-- Python Code -->
+            <div class="code-panel active" id="python-code">
+                <div class="code-box highlight">
+                    <div class="code-box-header">Python (FastAPI)</div>
+                    <pre><code><span class="kw">from</span> orvion.fastapi <span class="kw">import</span> require_payment
+
+<span class="dec">@</span>app.get(<span class="str">"/api/premium"</span>)
 <span class="dec">@</span>require_payment(
     amount=<span class="str">"0.01"</span>,
     currency=<span class="str">"USDC"</span>,
@@ -97,6 +103,26 @@
 )
 <span class="kw">async def</span> <span class="fn">premium</span>(request):
     <span class="kw">return</span> {<span class="str">"data"</span>: <span class="str">"premium"</span>}</code></pre>
+                </div>
+            </div>
+
+            <!-- Node.js Code -->
+            <div class="code-panel" id="nodejs-code">
+                <div class="code-box highlight">
+                    <div class="code-box-header">Node.js (Express)</div>
+                    <pre><code><span class="kw">const</span> { requirePayment } = <span class="fn">require</span>(<span class="str">'orvion'</span>);
+
+app.<span class="fn">get</span>(<span class="str">'/api/premium'</span>, 
+    <span class="fn">requirePayment</span>({
+        amount: <span class="str">'0.01'</span>,
+        currency: <span class="str">'USDC'</span>,
+        <span class="hl">hostedCheckout: true,</span>
+    }),
+    (req, res) => {
+        res.<span class="fn">json</span>({ <span class="str">data</span>: <span class="str">'premium'</span> });
+    }
+);</code></pre>
+                </div>
             </div>
         </div>
 
@@ -104,21 +130,21 @@
         <h2>Why Hosted Checkout?</h2>
         <div class="benefits-grid">
             <div class="benefit-item">
-                <span class="benefit-icon">🎨</span>
+                <span class="benefit-icon"></span>
                 <div>
                     <strong>No Wallet UI Required</strong>
                     <p>Orvion handles wallet connection and payment UI. No need to integrate wallet adapters.</p>
                 </div>
             </div>
             <div class="benefit-item">
-                <span class="benefit-icon">🔒</span>
+                <span class="benefit-icon"></span>
                 <div>
                     <strong>Secure by Default</strong>
                     <p>Payment verification happens server-side. Users can't bypass by manipulating the frontend.</p>
                 </div>
             </div>
             <div class="benefit-item">
-                <span class="benefit-icon">⚡</span>
+                <span class="benefit-icon"></span>
                 <div>
                     <strong>One Line Change</strong>
                     <p>Just add <code>hosted_checkout=True</code> to your existing @require_payment decorator.</p>
@@ -130,9 +156,27 @@
     <!-- Footer -->
     <footer class="demo-footer">
         <p>
-            <strong>Orvion Hosted Checkout Demo</strong> · 
+            <strong>Orvion Hosted Checkout Demo</strong> ·
             This demo uses Solana devnet — no real money is transferred.
         </p>
     </footer>
+
+    <script>
+        // Code tab switching
+        document.querySelectorAll('.code-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const lang = tab.dataset.lang;
+
+                // Update tabs
+                document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Update panels
+                document.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+                document.getElementById(`${lang}-code`)?.classList.add('active');
+            });
+        });
+    </script>
 </body>
+
 </html>

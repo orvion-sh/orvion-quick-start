@@ -34,6 +34,7 @@ if sdk_path not in sys.path:
 from orvion import OrvionClient
 from orvion.fastapi import (
     OrvionMiddleware,
+    create_payment_router,
     require_payment,
     sync_routes,
 )
@@ -83,9 +84,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add Orvion middleware
+# Add Orvion middleware and payment router
 if orvion_client:
     app.add_middleware(OrvionMiddleware, client=orvion_client, register_on_first_request=False)
+    app.include_router(create_payment_router(orvion_client), prefix="/api/payments", tags=["payments"])
 
 
 # =============================================================================

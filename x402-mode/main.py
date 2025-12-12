@@ -140,7 +140,7 @@ async def get_config():
 
 
 # =============================================================================
-# Static Files
+# Static Files & Pages
 # =============================================================================
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -148,7 +148,14 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 async def serve_index():
+    """Landing page"""
     return FileResponse("static/index.html")
+
+
+@app.get("/premium")
+async def serve_premium():
+    """Premium content page (user lands here after payment)"""
+    return FileResponse("static/premium.html")
 
 
 # =============================================================================

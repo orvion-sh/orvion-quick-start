@@ -85,6 +85,9 @@ const elements = {
     demoCard: document.getElementById('demo-card'),
     txnId: document.getElementById('txn-id'),
     paidAmount: document.getElementById('paid-amount'),
+    txHash: document.getElementById('tx-hash'),
+    txHashRow: document.getElementById('tx-hash-row'),
+    txHashLink: document.getElementById('tx-hash-link'),
     walletDisconnected: document.getElementById('wallet-disconnected'),
     walletConnected: document.getElementById('wallet-connected'),
     connectWalletBtn: document.getElementById('connect-wallet-btn'),
@@ -106,6 +109,21 @@ function setupEventListeners() {
     elements.payBtn?.addEventListener('click', handlePayment);
     elements.connectWalletBtn?.addEventListener('click', connectPhantomWallet);
     elements.disconnectWalletBtn?.addEventListener('click', disconnectWallet);
+    
+    // Code tab switching
+    document.querySelectorAll('.code-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const lang = tab.dataset.lang;
+            
+            // Update tabs
+            document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            // Update panels
+            document.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById(`${lang}-code`)?.classList.add('active');
+        });
+    });
 }
 
 // =============================================================================
@@ -117,11 +135,19 @@ async function checkExistingPayment() {
     const urlParams = new URLSearchParams(window.location.search);
     const chargeId = urlParams.get('charge_id');
     const status = urlParams.get('status');
+    const txHash = urlParams.get('tx_hash');
+    const amount = urlParams.get('amount');
     
     if (chargeId && status === 'succeeded') {
         sessionStorage.setItem('premium_txn_id', chargeId);
+        if (txHash) sessionStorage.setItem('premium_tx_hash', txHash);
+        if (amount) sessionStorage.setItem('premium_amount', amount);
         window.history.replaceState({}, document.title, '/');
-        showUnlockedState({ transaction_id: chargeId, amount: '0.01' });
+        showUnlockedState({ 
+            transaction_id: chargeId, 
+            amount: amount || '0.01',
+            tx_hash: txHash 
+        });
         return;
     }
     
@@ -135,14 +161,20 @@ async function checkExistingPayment() {
             const data = await response.json();
             
             if (response.status === 200 && data.access === 'granted') {
+                // Include stored tx_hash if available
+                data.tx_hash = data.tx_hash || sessionStorage.getItem('premium_tx_hash');
                 showUnlockedState(data);
                 return;
             } else {
                 sessionStorage.removeItem('premium_txn_id');
+                sessionStorage.removeItem('premium_tx_hash');
+                sessionStorage.removeItem('premium_amount');
             }
         } catch (error) {
             console.error('Failed to verify stored transaction:', error);
             sessionStorage.removeItem('premium_txn_id');
+            sessionStorage.removeItem('premium_tx_hash');
+            sessionStorage.removeItem('premium_amount');
         }
     }
     
@@ -166,6 +198,20 @@ function showUnlockedState(data) {
     if (elements.unlockedContent) elements.unlockedContent.style.display = 'block';
     if (elements.txnId) elements.txnId.textContent = data.transaction_id || data.payment?.transaction_id || '-';
     if (elements.paidAmount) elements.paidAmount.textContent = data.amount || data.payment?.amount || '0.01';
+    
+    // Display TX hash if available
+    const txHash = data.tx_hash || sessionStorage.getItem('premium_tx_hash');
+    if (txHash && elements.txHash) {
+        const shortHash = txHash.length > 20 ? txHash.slice(0, 8) + '...' + txHash.slice(-8) : txHash;
+        elements.txHash.textContent = shortHash;
+        if (elements.txHashLink) {
+            elements.txHashLink.href = `https://solscan.io/tx/${txHash}?cluster=devnet`;
+            elements.txHashLink.style.display = 'inline';
+        }
+        if (elements.txHashRow) elements.txHashRow.style.display = 'list-item';
+    } else if (elements.txHashRow) {
+        elements.txHashRow.style.display = 'none';
+    }
 }
 
 function setPaymentStatus(message, type = 'info') {
@@ -431,14 +477,27 @@ async function processPayment() {
         
         const confirmData = await confirmResponse.json();
         
-        // Store and show success
-        sessionStorage.setItem('premium_txn_id', confirmData.transaction_id || currentCharge.charge_id);
-        showUnlockedState({
-            transaction_id: confirmData.transaction_id || currentCharge.charge_id,
-            amount: currentCharge.amount,
-        });
-        setPaymentStatus('Payment successful!', 'success');
+        // Store transaction ID
+        const transactionId = confirmData.transaction_id || currentCharge.charge_id;
+        sessionStorage.setItem('premium_txn_id', transactionId);
+        sessionStorage.setItem('premium_tx_hash', signature);
+        sessionStorage.setItem('premium_amount', currentCharge.amount);
+        
+        setPaymentStatus('Payment successful! Redirecting...', 'success');
+        
+        // Redirect to premium page with payment details
+        const premiumUrl = new URL('/premium', window.location.origin);
+        premiumUrl.searchParams.set('charge_id', transactionId);
+        premiumUrl.searchParams.set('tx_hash', signature);
+        premiumUrl.searchParams.set('amount', currentCharge.amount);
+        premiumUrl.searchParams.set('status', 'succeeded');
+        
         currentCharge = null;
+        
+        // Short delay to show success message, then redirect
+        setTimeout(() => {
+            window.location.href = premiumUrl.toString();
+        }, 1000);
         
     } catch (error) {
         console.error('Payment failed:', error);

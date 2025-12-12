@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Premium Content - Orvion</title>
+    <title>Premium Content - Orvion x402</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +15,7 @@
         <div class="header-left">
             <a href="/" class="logo-link">
                 <span class="logo-text">ORVION</span>
-                <span class="logo-badge">HOSTED</span>
+                <span class="logo-badge">x402</span>
             </a>
         </div>
         <div class="header-right">
@@ -29,7 +29,7 @@
             <span style="font-size: 1.5rem;">✓</span>
             <div>
                 <strong>Payment Verified!</strong>
-                <p style="margin: 0; opacity: 0.9; font-size: 0.9rem;">Your payment has been confirmed on-chain via hosted checkout.</p>
+                <p style="margin: 0; opacity: 0.9; font-size: 0.9rem;">Your wallet payment has been confirmed on-chain via x402 protocol.</p>
             </div>
         </div>
 
@@ -41,9 +41,9 @@
             <div style="background: var(--bg-secondary); border-radius: 8px; padding: 1rem; margin-top: 1rem;">
                 <strong>Payment Details:</strong>
                 <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem; color: var(--text-secondary);">
-                    <li>Transaction ID: <code id="charge-id">-</code></li>
+                    <li>Transaction ID: <code id="txn-id">-</code></li>
                     <li>Amount: <span id="paid-amount">0.01</span> USDC</li>
-                    <li id="tx-hash-row">TX Hash: <code id="tx-hash">-</code> <a id="tx-hash-link" href="#" target="_blank" style="font-size: 0.85rem; margin-left: 0.5rem;">View on Solscan ↗</a></li>
+                    <li>TX Hash: <code id="tx-hash">-</code> <a id="tx-hash-link" href="#" target="_blank" style="font-size: 0.85rem; margin-left: 0.5rem;">View on Solscan ↗</a></li>
                 </ul>
             </div>
         </div>
@@ -67,8 +67,8 @@
                 <h2>How It Works</h2>
                 <p>
                     The x402 protocol builds on HTTP's native 402 Payment Required status code. When a client 
-                    requests a protected resource without payment, the server can either return a 402 status 
-                    (x402 mode) or redirect to a hosted checkout page (like you just experienced).
+                    requests a protected resource without payment, the server returns a 402 response with 
+                    payment requirements. The client then handles wallet connection and payment directly.
                 </p>
                 
                 <h2>Real-World Applications</h2>
@@ -90,7 +90,7 @@
     <!-- Footer -->
     <footer class="demo-footer">
         <p>
-            <strong>Orvion Hosted Checkout Demo</strong> · 
+            <strong>Orvion x402 Demo</strong> · 
             This demo uses Solana devnet — no real money is transferred.
         </p>
     </footer>
@@ -99,13 +99,13 @@
         // Extract payment details from URL
         const urlParams = new URLSearchParams(window.location.search);
         const chargeId = urlParams.get('charge_id');
-        let txHash = urlParams.get('tx_hash');
+        const txHash = urlParams.get('tx_hash');
         const amount = urlParams.get('amount');
         const status = urlParams.get('status');
         
         // Update display
         if (chargeId) {
-            document.getElementById('charge-id').textContent = chargeId.length > 20 
+            document.getElementById('txn-id').textContent = chargeId.length > 20 
                 ? chargeId.slice(0, 8) + '...' + chargeId.slice(-8) 
                 : chargeId;
         }
@@ -114,41 +114,15 @@
             document.getElementById('paid-amount').textContent = amount;
         }
         
-        // Function to update TX hash display
-        function updateTxHashDisplay(hash) {
-            if (hash) {
-                const shortTxHash = hash.length > 20 
-                    ? hash.slice(0, 8) + '...' + hash.slice(-8) 
-                    : hash;
-                document.getElementById('tx-hash').textContent = shortTxHash;
-                document.getElementById('tx-hash-link').href = `https://solscan.io/tx/${hash}?cluster=devnet`;
-                document.getElementById('tx-hash-link').style.display = 'inline';
-                document.getElementById('tx-hash-row').style.display = 'list-item';
-            } else {
-                document.getElementById('tx-hash-row').style.display = 'none';
-            }
-        }
-        
-        // If tx_hash is in URL, use it directly
         if (txHash) {
-            updateTxHashDisplay(txHash);
-        } else if (chargeId) {
-            // Fetch charge details to get tx_hash
-            fetch(`/api/payments/charge/${chargeId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.tx_hash) {
-                        updateTxHashDisplay(data.tx_hash);
-                    } else {
-                        document.getElementById('tx-hash-row').style.display = 'none';
-                    }
-                })
-                .catch(err => {
-                    console.error('Failed to fetch charge details:', err);
-                    document.getElementById('tx-hash-row').style.display = 'none';
-                });
+            const shortTxHash = txHash.length > 20 
+                ? txHash.slice(0, 8) + '...' + txHash.slice(-8) 
+                : txHash;
+            document.getElementById('tx-hash').textContent = shortTxHash;
+            document.getElementById('tx-hash-link').href = `https://solscan.io/tx/${txHash}?cluster=devnet`;
+            document.getElementById('tx-hash-link').style.display = 'inline';
         } else {
-            document.getElementById('tx-hash-row').style.display = 'none';
+            document.getElementById('tx-hash-link').style.display = 'none';
         }
         
         // Clean up URL (optional - keeps it cleaner)
