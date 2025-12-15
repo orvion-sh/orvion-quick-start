@@ -39,7 +39,7 @@ function createAssociatedTokenAccountInstruction(payer, associatedToken, owner, 
     return new solanaWeb3.TransactionInstruction({
         keys,
         programId: ASSOCIATED_TOKEN_PROGRAM_ID,
-        data: Buffer.alloc(0),
+        data: new Uint8Array(0), // Use Uint8Array instead of Buffer for browser compatibility
     });
 }
 
@@ -52,9 +52,14 @@ function createTransferInstruction(source, destination, owner, amount) {
         { pubkey: destination, isSigner: false, isWritable: true },
         { pubkey: owner, isSigner: true, isWritable: false },
     ];
-    const data = Buffer.alloc(9);
-    data.writeUInt8(3, 0); // Transfer instruction = 3
-    data.writeBigUInt64LE(BigInt(amount), 1);
+    // Use Uint8Array instead of Buffer for better browser compatibility
+    const data = new Uint8Array(9);
+    data[0] = 3; // Transfer instruction = 3
+    // Write amount as little-endian 64-bit integer
+    const amountBigInt = BigInt(amount);
+    for (let i = 0; i < 8; i++) {
+        data[1 + i] = Number((amountBigInt >> BigInt(i * 8)) & BigInt(0xff));
+    }
     return new solanaWeb3.TransactionInstruction({
         keys,
         programId: TOKEN_PROGRAM_ID,
@@ -404,6 +409,16 @@ async function processPayment() {
         
         setPaymentStatus('Checking wallet balance...', 'info');
         
+        // Check if wallet has enough SOL for transaction fees
+        const solBalance = await connection.getBalance(fromAddress);
+        const minSolForFees = 0.01 * solanaWeb3.LAMPORTS_PER_SOL; // ~0.01 SOL for fees
+        if (solBalance < minSolForFees) {
+            setPaymentStatus('Not enough SOL for transaction fees. Get devnet SOL from faucet.solana.com', 'error');
+            elements.payBtn.disabled = false;
+            elements.payBtnText.textContent = walletPublicKey ? 'Pay Now' : 'Connect Wallet & Pay';
+            return;
+        }
+        
         // Get/create token accounts using inline helpers
         const fromTokenAccount = await getAssociatedTokenAddress(tokenMint, fromAddress);
         const toTokenAccount = await getAssociatedTokenAddress(tokenMint, toAddress);
@@ -501,7 +516,25 @@ async function processPayment() {
         
     } catch (error) {
         console.error('Payment failed:', error);
-        setPaymentStatus(error.message || 'Payment failed', 'error');
+        
+        // Parse common Phantom/Solana wallet errors
+        let errorMessage = 'Payment failed';
+        const errorString = error?.message || error?.toString() || '';
+        
+        if (errorString.includes('User rejected') || errorString.includes('user rejected')) {
+            errorMessage = 'Transaction cancelled by user';
+        } else if (errorString.includes('insufficient') || errorString.includes('Insufficient')) {
+            errorMessage = 'Insufficient funds. Make sure you have enough SOL for fees and USDC for payment.';
+        } else if (errorString.includes('0x1') || errorString.includes('InsufficientFunds')) {
+            errorMessage = 'Insufficient token balance. Get devnet USDC from a faucet.';
+        } else if (errorString.includes('Unexpected error')) {
+            // This is often a simulation failure or wallet internal error
+            errorMessage = 'Transaction failed. Please ensure you have:\n• Devnet SOL for fees (get from faucet.solana.com)\n• Devnet USDC (for payment)';
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+        
+        setPaymentStatus(errorMessage, 'error');
         elements.payBtn.disabled = false;
         elements.payBtnText.textContent = walletPublicKey ? 'Pay Now' : 'Connect Wallet & Pay';
     }
