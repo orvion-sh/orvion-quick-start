@@ -11,6 +11,32 @@
     <script>window.Buffer = window.buffer.Buffer;</script>
     <!-- Solana Web3.js for wallet transactions -->
     <script src="https://unpkg.com/@solana/web3.js@1.91.8/lib/index.iife.min.js"></script>
+    <!-- Inline base58 encoder (since bs58 library has module issues in browser) -->
+    <script>
+        // Simple base58 encoder for Solana signatures
+        window.bs58 = {
+            encode: function (buffer) {
+                const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+                const BASE = 58;
+
+                let encoded = '';
+                let num = BigInt('0x' + Array.from(buffer).map(b => b.toString(16).padStart(2, '0')).join(''));
+
+                while (num > 0) {
+                    const remainder = num % BigInt(BASE);
+                    num = num / BigInt(BASE);
+                    encoded = ALPHABET[Number(remainder)] + encoded;
+                }
+
+                // Handle leading zeros
+                for (let i = 0; i < buffer.length && buffer[i] === 0; i++) {
+                    encoded = ALPHABET[0] + encoded;
+                }
+
+                return encoded;
+            }
+        };
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -135,7 +161,9 @@
                     <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem; color: var(--text-secondary);">
                         <li>Transaction ID: <code id="txn-id">-</code></li>
                         <li>Amount: <span id="paid-amount">0.01</span> USDC</li>
-                        <li id="tx-hash-row">TX Hash: <code id="tx-hash">-</code> <a id="tx-hash-link" href="#" target="_blank" style="font-size: 0.85rem; margin-left: 0.5rem;">View on Solscan ↗</a></li>
+                        <li id="tx-hash-row">TX Hash: <code id="tx-hash">-</code> <a id="tx-hash-link" href="#"
+                                target="_blank" style="font-size: 0.85rem; margin-left: 0.5rem;">View on Solscan ↗</a>
+                        </li>
                     </ul>
                 </div>
             </div>

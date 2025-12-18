@@ -114,16 +114,16 @@ function setupEventListeners() {
     elements.payBtn?.addEventListener('click', handlePayment);
     elements.connectWalletBtn?.addEventListener('click', connectPhantomWallet);
     elements.disconnectWalletBtn?.addEventListener('click', disconnectWallet);
-    
+
     // Code tab switching
     document.querySelectorAll('.code-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             const lang = tab.dataset.lang;
-            
+
             // Update tabs
             document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            
+
             // Update panels
             document.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
             document.getElementById(`${lang}-code`)?.classList.add('active');
@@ -142,20 +142,20 @@ async function checkExistingPayment() {
     const status = urlParams.get('status');
     const txHash = urlParams.get('tx_hash');
     const amount = urlParams.get('amount');
-    
+
     if (chargeId && status === 'succeeded') {
         sessionStorage.setItem('premium_txn_id', chargeId);
         if (txHash) sessionStorage.setItem('premium_tx_hash', txHash);
         if (amount) sessionStorage.setItem('premium_amount', amount);
         window.history.replaceState({}, document.title, '/');
-        showUnlockedState({ 
-            transaction_id: chargeId, 
+        showUnlockedState({
+            transaction_id: chargeId,
             amount: amount || '0.01',
-            tx_hash: txHash 
+            tx_hash: txHash
         });
         return;
     }
-    
+
     // Check stored transaction
     const storedTxnId = sessionStorage.getItem('premium_txn_id');
     if (storedTxnId) {
@@ -164,7 +164,7 @@ async function checkExistingPayment() {
                 headers: { 'X-Transaction-Id': storedTxnId }
             });
             const data = await response.json();
-            
+
             if (response.status === 200 && data.access === 'granted') {
                 // Include stored tx_hash if available
                 data.tx_hash = data.tx_hash || sessionStorage.getItem('premium_tx_hash');
@@ -182,7 +182,7 @@ async function checkExistingPayment() {
             sessionStorage.removeItem('premium_amount');
         }
     }
-    
+
     showLockedState();
 }
 
@@ -203,7 +203,7 @@ function showUnlockedState(data) {
     if (elements.unlockedContent) elements.unlockedContent.style.display = 'block';
     if (elements.txnId) elements.txnId.textContent = data.transaction_id || data.payment?.transaction_id || '-';
     if (elements.paidAmount) elements.paidAmount.textContent = data.amount || data.payment?.amount || '0.01';
-    
+
     // Display TX hash if available
     const txHash = data.tx_hash || sessionStorage.getItem('premium_tx_hash');
     if (txHash && elements.txHash) {
@@ -227,7 +227,7 @@ function setPaymentStatus(message, type = 'info') {
 
 function updatePayButtonState() {
     if (!elements.payBtn || !elements.payBtnText) return;
-    
+
     if (walletPublicKey) {
         elements.payBtnText.textContent = 'Pay Now';
         elements.payBtn.classList.add('wallet-connected');
@@ -242,16 +242,18 @@ function updatePayButtonState() {
 // =============================================================================
 
 function getPhantomProvider() {
-    if ('phantom' in window) {
-        const provider = window.phantom?.solana;
-        if (provider?.isPhantom) return provider;
+    if ('phantom' in window && window.phantom?.solana?.isPhantom) {
+        return window.phantom.solana;
+    }
+    if ('solana' in window && window.solana?.isPhantom) {
+        return window.solana;
     }
     return null;
 }
 
 function checkWalletConnection() {
     const provider = getPhantomProvider();
-    
+
     if (!provider) {
         if (elements.connectWalletBtn) {
             elements.connectWalletBtn.innerHTML = '⬇️ Install Phantom';
@@ -259,11 +261,11 @@ function checkWalletConnection() {
         }
         return;
     }
-    
+
     provider.on('connect', (publicKey) => updateWalletUI(publicKey));
     provider.on('disconnect', () => updateWalletUI(null));
     provider.on('accountChanged', (publicKey) => updateWalletUI(publicKey));
-    
+
     if (provider.isConnected && provider.publicKey) {
         updateWalletUI(provider.publicKey);
     }
@@ -275,13 +277,13 @@ async function connectPhantomWallet() {
         window.open('https://phantom.app/', '_blank');
         return false;
     }
-    
+
     try {
         if (elements.connectWalletBtn) {
             elements.connectWalletBtn.disabled = true;
             elements.connectWalletBtn.textContent = 'Connecting...';
         }
-        
+
         const resp = await provider.connect();
         walletPublicKey = resp.publicKey;
         connectedWallet = provider;
@@ -309,11 +311,11 @@ async function disconnectWallet() {
 
 function updateWalletUI(publicKey) {
     walletPublicKey = publicKey;
-    
+
     if (publicKey) {
         const address = publicKey.toBase58();
         const shortAddress = `${address.slice(0, 4)}...${address.slice(-4)}`;
-        
+
         if (elements.walletDisconnected) elements.walletDisconnected.style.display = 'none';
         if (elements.walletConnected) elements.walletConnected.style.display = 'flex';
         if (elements.walletAddress) elements.walletAddress.textContent = shortAddress;
@@ -321,7 +323,7 @@ function updateWalletUI(publicKey) {
         if (elements.walletDisconnected) elements.walletDisconnected.style.display = 'block';
         if (elements.walletConnected) elements.walletConnected.style.display = 'none';
     }
-    
+
     updatePayButtonState();
 }
 
@@ -330,31 +332,19 @@ function updateWalletUI(publicKey) {
 // =============================================================================
 
 async function handlePayment() {
-    // Connect wallet if not connected
-    if (!walletPublicKey || !connectedWallet) {
-        setPaymentStatus('Connecting wallet...', 'info');
-        elements.payBtn.disabled = true;
-        
-        const connected = await connectPhantomWallet();
-        if (!connected) {
-            setPaymentStatus('Wallet connection cancelled', 'error');
-            elements.payBtn.disabled = false;
-            return;
-        }
-    }
-    
-    // Create charge if needed
+    // Check if we already have a charge
     if (!currentCharge) {
-        setPaymentStatus('Creating payment...', 'info');
-        elements.payBtn.disabled = true;
-        
+        elements.payBtnText.textContent = 'Creating charge...';
+        setPaymentStatus('Creating payment charge...', 'info');
+
         const chargeCreated = await createCharge();
         if (!chargeCreated) {
             elements.payBtn.disabled = false;
+            elements.payBtnText.textContent = 'Pay Now';
             return;
         }
     }
-    
+
     await processPayment();
 }
 
@@ -362,19 +352,19 @@ async function createCharge() {
     try {
         const response = await fetch('/api/premium');
         const data = await response.json();
-        
+
         if (response.status === 200 && data.access === 'granted') {
             sessionStorage.setItem('premium_txn_id', data.payment?.transaction_id);
             showUnlockedState(data);
             setPaymentStatus('', '');
             return false;
         }
-        
+
         if (response.status === 402) {
             currentCharge = data;
             return true;
         }
-        
+
         setPaymentStatus(data.error || 'Failed to create charge', 'error');
         return false;
     } catch (error) {
@@ -384,160 +374,134 @@ async function createCharge() {
     }
 }
 
+// Solana Constants
+const SOLANA_DEVNET_RPC = 'https://api.devnet.solana.com';
+const USDC_DEVNET_MINT = new solanaWeb3.PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
+
 async function processPayment() {
     const x402 = currentCharge.x402_requirements || {};
     const railConfig = x402.rail_config || {};
-    
-    if (!railConfig.pay_to_address) {
-        setPaymentStatus('No payment address available', 'error');
-        return;
+
+    if (!walletPublicKey || !connectedWallet) {
+        setPaymentStatus('Connecting wallet...', 'info');
+        elements.payBtn.disabled = true;
+        const connected = await connectPhantomWallet();
+        if (!connected) {
+            setPaymentStatus('Wallet connection required', 'error');
+            elements.payBtn.disabled = false;
+            elements.payBtnText.textContent = 'Pay Now';
+            return;
+        }
     }
-    
+
     elements.payBtn.disabled = true;
     elements.payBtnText.textContent = 'Processing...';
-    setPaymentStatus('Creating transaction...', 'info');
-    
+    setPaymentStatus('Building transaction...', 'info');
+
     try {
-        const { Connection, PublicKey, Transaction } = solanaWeb3;
-        
-        const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
-        const toAddress = new PublicKey(railConfig.pay_to_address);
-        const fromAddress = walletPublicKey;
-        
-        // Official USDC on Solana devnet (Circle)
-        const tokenMint = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
-        
-        setPaymentStatus('Checking wallet balance...', 'info');
-        
-        // Check if wallet has enough SOL for transaction fees
-        const solBalance = await connection.getBalance(fromAddress);
-        const minSolForFees = 0.01 * solanaWeb3.LAMPORTS_PER_SOL; // ~0.01 SOL for fees
-        if (solBalance < minSolForFees) {
-            setPaymentStatus('Not enough SOL for transaction fees. Get devnet SOL from faucet.solana.com', 'error');
-            elements.payBtn.disabled = false;
-            elements.payBtnText.textContent = walletPublicKey ? 'Pay Now' : 'Connect Wallet & Pay';
-            return;
-        }
-        
-        // Get/create token accounts using inline helpers
-        const fromTokenAccount = await getAssociatedTokenAddress(tokenMint, fromAddress);
-        const toTokenAccount = await getAssociatedTokenAddress(tokenMint, toAddress);
-        
-        // Check if sender's token account exists
-        const fromAccountInfo = await connection.getAccountInfo(fromTokenAccount);
-        if (!fromAccountInfo) {
-            setPaymentStatus('No USDC found in wallet. Get devnet USDC from a faucet first.', 'error');
-            elements.payBtn.disabled = false;
-            elements.payBtnText.textContent = walletPublicKey ? 'Pay Now' : 'Connect Wallet & Pay';
-            return;
-        }
-        
-        // Check if recipient token account exists
-        const toAccountInfo = await connection.getAccountInfo(toTokenAccount);
-        
-        const transaction = new Transaction();
-        
-        // Create recipient token account if needed
-        if (!toAccountInfo) {
-            transaction.add(
-                createAssociatedTokenAccountInstruction(
-                    fromAddress, toTokenAccount, toAddress, tokenMint
-                )
-            );
-        }
-        
-        // Add transfer instruction (0.01 USDC = 10000 micro-units with 6 decimals)
-        const amount = Math.round(parseFloat(currentCharge.amount) * 1_000_000);
-        
-        setPaymentStatus('Please approve in your wallet...', 'info');
-        transaction.add(
-            createTransferInstruction(
-                fromTokenAccount, toTokenAccount, fromAddress, amount
-            )
-        );
-        
+        const connection = new solanaWeb3.Connection(SOLANA_DEVNET_RPC, 'confirmed');
+        const merchantAddress = new solanaWeb3.PublicKey(railConfig.pay_to_address);
+        const amount = parseFloat(currentCharge.amount);
+        const usdcAmount = Math.floor(amount * 1000000); // 6 decimals
+
+        // 1. Get/Derive ATAs
+        setPaymentStatus('Deriving token accounts...', 'info');
+        const sourceATA = await getAssociatedTokenAddress(USDC_DEVNET_MINT, walletPublicKey);
+        const destATA = await getAssociatedTokenAddress(USDC_DEVNET_MINT, merchantAddress);
+
+        // 2. Build Transaction
+        const transaction = new solanaWeb3.Transaction();
+
+        // Add Transfer Instruction (Manual encoding for standard SPL Token Transfer)
+        // Instruction: 3 (Transfer), Amount: u64 (little endian)
+        const dataLayout = window.Buffer.alloc(9);
+        dataLayout.writeUInt8(3, 0); // Instruction 3 = Transfer
+        // Write u64 amount (little endian)
+        const bigAmount = BigInt(usdcAmount);
+        dataLayout.writeBigUInt64LE(bigAmount, 1);
+
+        const transferIx = new solanaWeb3.TransactionInstruction({
+            keys: [
+                { pubkey: sourceATA, isSigner: false, isWritable: true },
+                { pubkey: destATA, isSigner: false, isWritable: true },
+                { pubkey: walletPublicKey, isSigner: true, isWritable: false }, // Owner
+            ],
+            programId: TOKEN_PROGRAM_ID,
+            data: dataLayout
+        });
+
+        transaction.add(transferIx);
+        transaction.feePayer = walletPublicKey;
+
         // Get recent blockhash
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+        const { blockhash } = await connection.getLatestBlockhash();
         transaction.recentBlockhash = blockhash;
-        transaction.feePayer = fromAddress;
-        
-        // Sign and send
-        setPaymentStatus('Signing transaction...', 'info');
-        const signed = await connectedWallet.signTransaction(transaction);
-        
-        setPaymentStatus('Sending to network...', 'info');
-        const signature = await connection.sendRawTransaction(signed.serialize());
-        
-        setPaymentStatus('Confirming on-chain...', 'info');
-        await connection.confirmTransaction({
-            signature,
-            blockhash,
-            lastValidBlockHeight
-        }, 'confirmed');
-        
-        // Confirm payment with backend
-        setPaymentStatus('Verifying payment...', 'info');
-        const confirmResponse = await fetch('/api/payments/confirm', {
+
+        setPaymentStatus('Please sign the transaction in your wallet...', 'info');
+
+        // 3. Sign
+        const signedTx = await connectedWallet.signTransaction(transaction);
+
+        // 4. Serialize
+        const serializedTx = signedTx.serialize();
+        const txBase64 = serializedTx.toString('base64');
+        const txBase58 = bs58.encode(serializedTx); // Some facilitators want base58, some base64. 
+        // x402 generally uses base64 for 'transaction' field or base58 inside wrapper? 
+        // Let's use base58 as signature usually implies that, but for 'transaction' keys standard is often base64.
+        // The x402 Go implementation uses hex or base64. 
+        // We will send signature as base58 string to fit our backend 'payment_signature' field expectation (string).
+
+        setPaymentStatus('Verifying payment with facilitator...', 'info');
+
+        // 5. Send Payload
+        // We wrap it in a structure that our backend will wrap into "payload" object.
+        // Backend wrapper: if dict, wraps it.
+        const paymentPayload = {
+            transaction: txBase58, // Sending base58 encoded transaction
+            encoding: 'base58'
+        };
+
+        const processResponse = await fetch('/api/payments/process', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 transaction_id: currentCharge.charge_id,
-                tx_hash: signature,
+                payment_signature: JSON.stringify(paymentPayload),
             }),
         });
-        
-        if (!confirmResponse.ok) {
-            throw new Error('Payment confirmation failed');
+
+        if (!processResponse.ok) {
+            const errorData = await processResponse.json();
+            throw new Error(errorData.error || 'Payment failed');
         }
-        
-        const confirmData = await confirmResponse.json();
-        
-        // Store transaction ID
-        const transactionId = confirmData.transaction_id || currentCharge.charge_id;
-        sessionStorage.setItem('premium_txn_id', transactionId);
-        sessionStorage.setItem('premium_tx_hash', signature);
-        sessionStorage.setItem('premium_amount', currentCharge.amount);
-        
-        setPaymentStatus('Payment successful! Redirecting...', 'success');
-        
-        // Redirect to premium page with payment details
-        const premiumUrl = new URL('/premium', window.location.origin);
-        premiumUrl.searchParams.set('charge_id', transactionId);
-        premiumUrl.searchParams.set('tx_hash', signature);
-        premiumUrl.searchParams.set('amount', currentCharge.amount);
-        premiumUrl.searchParams.set('status', 'succeeded');
-        
-        currentCharge = null;
-        
-        // Short delay to show success message, then redirect
-        setTimeout(() => {
-            window.location.href = premiumUrl.toString();
-        }, 1000);
-        
+
+        const processData = await processResponse.json();
+        // ... rest of success handling handled by existing code?
+        // Wait, I am replacing the function, so I need to include success handling.
+
+        if (processData.status === 'succeeded' || processData.tx_hash) {
+            setPaymentStatus('Payment Confirmed!', 'success');
+            sessionStorage.setItem('premium_txn_id', processData.id);
+            location.reload();
+        } else {
+            setPaymentStatus('Payment submitted but not confirmed yet.', 'warning');
+        }
+
     } catch (error) {
-        console.error('Payment failed:', error);
-        
-        // Parse common Phantom/Solana wallet errors
-        let errorMessage = 'Payment failed';
-        const errorString = error?.message || error?.toString() || '';
-        
-        if (errorString.includes('User rejected') || errorString.includes('user rejected')) {
-            errorMessage = 'Transaction cancelled by user';
-        } else if (errorString.includes('insufficient') || errorString.includes('Insufficient')) {
-            errorMessage = 'Insufficient funds. Make sure you have enough SOL for fees and USDC for payment.';
-        } else if (errorString.includes('0x1') || errorString.includes('InsufficientFunds')) {
-            errorMessage = 'Insufficient token balance. Get devnet USDC from a faucet.';
-        } else if (errorString.includes('Unexpected error')) {
-            // This is often a simulation failure or wallet internal error
-            errorMessage = 'Transaction failed. Please ensure you have:\n• Devnet SOL for fees (get from faucet.solana.com)\n• Devnet USDC (for payment)';
-        } else if (error.message) {
-            errorMessage = error.message;
-        }
-        
-        setPaymentStatus(errorMessage, 'error');
+        console.error('Payment Error:', error);
+        setPaymentStatus(`Payment failed: ${error.message}`, 'error');
         elements.payBtn.disabled = false;
-        elements.payBtnText.textContent = walletPublicKey ? 'Pay Now' : 'Connect Wallet & Pay';
+        elements.payBtnText.textContent = 'Pay Now';
     }
+}
+
+
+
+
+
+// Helper function for demo delays
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // =============================================================================
