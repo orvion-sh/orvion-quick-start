@@ -409,28 +409,37 @@ async function processPayment() {
         const sourceATA = await getAssociatedTokenAddress(USDC_DEVNET_MINT, walletPublicKey);
         const destATA = await getAssociatedTokenAddress(USDC_DEVNET_MINT, merchantAddress);
 
+        // Pre-Flight Check: Ensure Source has Account
+        const sourceAccount = await connection.getAccountInfo(sourceATA);
+        if (!sourceAccount) {
+            throw new Error('Your wallet has no USDC (Devnet) account. Please get Devnet USDC first.');
+        }
+
         // 2. Build Transaction
         const transaction = new solanaWeb3.Transaction();
 
-        // Add Transfer Instruction (Manual encoding for standard SPL Token Transfer)
-        // Instruction: 3 (Transfer), Amount: u64 (little endian)
-        const dataLayout = window.Buffer.alloc(9);
-        dataLayout.writeUInt8(3, 0); // Instruction 3 = Transfer
-        // Write u64 amount (little endian)
-        const bigAmount = BigInt(usdcAmount);
-        dataLayout.writeBigUInt64LE(bigAmount, 1);
+        // Check Destination Account - Create if missing
+        const destAccount = await connection.getAccountInfo(destATA);
+        if (!destAccount) {
+            console.log('Destination ATA missing, adding creation instruction...');
+            const createATAIx = createAssociatedTokenAccountInstruction(
+                walletPublicKey, // payer
+                destATA,         // associatedToken
+                merchantAddress, // owner
+                USDC_DEVNET_MINT // mint
+            );
+            transaction.add(createATAIx);
+        }
 
-        const transferIx = new solanaWeb3.TransactionInstruction({
-            keys: [
-                { pubkey: sourceATA, isSigner: false, isWritable: true },
-                { pubkey: destATA, isSigner: false, isWritable: true },
-                { pubkey: walletPublicKey, isSigner: true, isWritable: false }, // Owner
-            ],
-            programId: TOKEN_PROGRAM_ID,
-            data: dataLayout
-        });
-
+        // Add Transfer Instruction
+        const transferIx = createTransferInstruction(
+            sourceATA,
+            destATA,
+            walletPublicKey,
+            usdcAmount
+        );
         transaction.add(transferIx);
+
         transaction.feePayer = walletPublicKey;
 
         // Get recent blockhash
