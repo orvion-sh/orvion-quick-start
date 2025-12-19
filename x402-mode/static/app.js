@@ -67,6 +67,32 @@ function createTransferInstruction(source, destination, owner, amount) {
     });
 }
 
+/**
+ * Creates a checked transfer instruction (includes mint and decimals)
+ */
+function createTransferCheckedInstruction(source, mint, destination, owner, amount, decimals) {
+    const keys = [
+        { pubkey: source, isSigner: false, isWritable: true },
+        { pubkey: mint, isSigner: false, isWritable: false },
+        { pubkey: destination, isSigner: false, isWritable: true },
+        { pubkey: owner, isSigner: true, isWritable: false },
+    ];
+    // Instruction layout: u8 instruction (12), u64 amount, u8 decimals
+    const data = new Uint8Array(1 + 8 + 1);
+    data[0] = 12; // TransferChecked
+    const amountBigInt = BigInt(amount);
+    for (let i = 0; i < 8; i++) {
+        data[1 + i] = Number((amountBigInt >> BigInt(i * 8)) & BigInt(0xff));
+    }
+    data[9] = decimals;
+
+    return new solanaWeb3.TransactionInstruction({
+        keys,
+        programId: TOKEN_PROGRAM_ID,
+        data,
+    });
+}
+
 // =============================================================================
 // State
 // =============================================================================
@@ -374,13 +400,27 @@ async function createCharge() {
     }
 }
 
-// Solana Constants
-const SOLANA_DEVNET_RPC = 'https://api.devnet.solana.com';
+// Solana Constants (allow overrides from window for custom RPC and limits)
+const SOLANA_DEVNET_RPC =
+    (typeof window !== 'undefined' && (window.PAYAI_SOLANA_RPC_URL || window.SOLANA_RPC_URL)) ||
+    'https://api.devnet.solana.com';
+const MAX_PAYMENT_AMOUNT_USDC =
+    typeof window !== 'undefined' && window.PAYAI_MAX_PAYMENT_USDC
+        ? parseFloat(window.PAYAI_MAX_PAYMENT_USDC)
+        : null; // e.g., set window.PAYAI_MAX_PAYMENT_USDC = 0.05 to cap payments
 const USDC_DEVNET_MINT = new solanaWeb3.PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
 
 async function processPayment() {
     const x402 = currentCharge.x402_requirements || {};
     const railConfig = x402.rail_config || {};
+    const feePayerAddress =
+        // Manual override (e.g., facilitator-provided fee payer)
+        (typeof window !== 'undefined' && window.PAYAI_FEE_PAYER) ||
+        // Try top-level extra if the backend included it
+        (x402.extra && (x402.extra.feePayer || x402.extra.fee_payer)) ||
+        // Try rail_config.extra
+        (railConfig.extra && (railConfig.extra.feePayer || railConfig.extra.fee_payer)) ||
+        null;
 
     if (!walletPublicKey || !connectedWallet) {
         setPaymentStatus('Connecting wallet...', 'info');
@@ -401,7 +441,11 @@ async function processPayment() {
     try {
         const connection = new solanaWeb3.Connection(SOLANA_DEVNET_RPC, 'confirmed');
         const merchantAddress = new solanaWeb3.PublicKey(railConfig.pay_to_address);
+        const feePayerKey = feePayerAddress ? new solanaWeb3.PublicKey(feePayerAddress) : walletPublicKey;
         const amount = parseFloat(currentCharge.amount);
+        if (MAX_PAYMENT_AMOUNT_USDC !== null && amount > MAX_PAYMENT_AMOUNT_USDC) {
+            throw new Error(`Payment exceeds allowed maximum (${MAX_PAYMENT_AMOUNT_USDC} USDC)`);
+        }
         const usdcAmount = Math.floor(amount * 1000000); // 6 decimals
 
         // 1. Get/Derive ATAs
@@ -415,50 +459,54 @@ async function processPayment() {
             throw new Error('Your wallet has no USDC (Devnet) account. Please get Devnet USDC first.');
         }
 
-        // 2. Build Transaction
-        const transaction = new solanaWeb3.Transaction();
+        // 2. Build Versioned Transaction with required compute budget + checked transfer
+        const instructions = [];
+
+        // Compute budget tweaks (helps facilitator verification expectations)
+        instructions.push(
+            solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 1_000_000 })
+        );
+        instructions.push(
+            solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 })
+        );
 
         // Check Destination Account - Create if missing
         const destAccount = await connection.getAccountInfo(destATA);
         if (!destAccount) {
-            console.log('Destination ATA missing, adding creation instruction...');
-            const createATAIx = createAssociatedTokenAccountInstruction(
-                walletPublicKey, // payer
-                destATA,         // associatedToken
-                merchantAddress, // owner
-                USDC_DEVNET_MINT // mint
-            );
-            transaction.add(createATAIx);
+            throw new Error('Merchant USDC associated token account is missing. Please ask the merchant to create their USDC ATA first.');
         }
 
-        // Add Transfer Instruction
-        const transferIx = createTransferInstruction(
-            sourceATA,
-            destATA,
-            walletPublicKey,
-            usdcAmount
+        // Add TransferChecked Instruction (instruction 12, includes decimals)
+        instructions.push(
+            createTransferCheckedInstruction(
+                sourceATA,
+                USDC_DEVNET_MINT,
+                destATA,
+                walletPublicKey,
+                usdcAmount,
+                6 // USDC decimals
+            )
         );
-        transaction.add(transferIx);
 
-        transaction.feePayer = walletPublicKey;
-
-        // Get recent blockhash
+        // Compile to v0 message and VersionedTransaction
         const { blockhash } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
+        const messageV0 = new solanaWeb3.TransactionMessage({
+            payerKey: feePayerKey,
+            recentBlockhash: blockhash,
+            instructions,
+        }).compileToV0Message();
+
+        const transaction = new solanaWeb3.VersionedTransaction(messageV0);
 
         setPaymentStatus('Please sign the transaction in your wallet...', 'info');
 
         // 3. Sign
         const signedTx = await connectedWallet.signTransaction(transaction);
 
-        // 4. Serialize
+        // 4. Serialize (VersionedTransaction)
         const serializedTx = signedTx.serialize();
-        const txBase64 = serializedTx.toString('base64');
-        const txBase58 = bs58.encode(serializedTx); // Some facilitators want base58, some base64. 
-        // x402 generally uses base64 for 'transaction' field or base58 inside wrapper? 
-        // Let's use base58 as signature usually implies that, but for 'transaction' keys standard is often base64.
-        // The x402 Go implementation uses hex or base64. 
-        // We will send signature as base58 string to fit our backend 'payment_signature' field expectation (string).
+        const txBase64 = Buffer.from(serializedTx).toString('base64'); // PayAI expects base64-encoded partial transaction
+        const txBase58 = bs58.encode(serializedTx); // Keep for debugging/backward compatibility if needed
 
         setPaymentStatus('Verifying payment with facilitator...', 'info');
 
@@ -466,8 +514,9 @@ async function processPayment() {
         // We wrap it in a structure that our backend will wrap into "payload" object.
         // Backend wrapper: if dict, wraps it.
         const paymentPayload = {
-            transaction: txBase58, // Sending base58 encoded transaction
-            encoding: 'base58'
+            transaction: txBase64,
+            encoding: 'base64',
+            legacyTransaction: txBase58, // Optional helper field; backend will prefer base64
         };
 
         const processResponse = await fetch('/api/payments/process', {
