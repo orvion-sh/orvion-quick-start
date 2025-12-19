@@ -413,6 +413,20 @@ const USDC_DEVNET_MINT = new solanaWeb3.PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnP
 async function processPayment() {
     const x402 = currentCharge.x402_requirements || {};
     const railConfig = x402.rail_config || {};
+    
+    // Debug: Log what we received
+    console.log('[DEBUG] x402_requirements structure:', {
+        has_extra: !!x402.extra,
+        extra_keys: x402.extra ? Object.keys(x402.extra) : [],
+        extra_feePayer: x402.extra?.feePayer,
+        extra_fee_payer: x402.extra?.fee_payer,
+        has_rail_config: !!railConfig,
+        rail_config_has_extra: !!railConfig.extra,
+        rail_config_extra_keys: railConfig.extra ? Object.keys(railConfig.extra) : [],
+        rail_config_extra_feePayer: railConfig.extra?.feePayer,
+        rail_config_extra_fee_payer: railConfig.extra?.fee_payer,
+    });
+    
     const feePayerAddress =
         // Manual override (e.g., facilitator-provided fee payer)
         (typeof window !== 'undefined' && window.PAYAI_FEE_PAYER) ||
@@ -520,13 +534,18 @@ async function processPayment() {
             legacyTransaction: txBase58, // Optional helper field; backend will prefer base64
         };
 
+        // #region agent log
+        const requestBody = {
+            transaction_id: currentCharge.charge_id || currentCharge.id, // Support both charge_id and id
+            payment_payload: paymentPayload, // Fixed: changed from payment_signature to payment_payload, removed JSON.stringify
+        };
+        fetch('http://127.0.0.1:7242/ingest/7b2f239b-2833-47cc-95b9-48b229d0abb6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:523',message:'Sending payment request',data:{transaction_id:requestBody.transaction_id,has_payment_payload:!!requestBody.payment_payload,payment_payload_type:typeof requestBody.payment_payload,payment_payload_keys:requestBody.payment_payload?Object.keys(requestBody.payment_payload):null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+
         const processResponse = await fetch('/api/payments/process', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                transaction_id: currentCharge.charge_id,
-                payment_signature: JSON.stringify(paymentPayload),
-            }),
+            body: JSON.stringify(requestBody),
         });
 
         if (!processResponse.ok) {
