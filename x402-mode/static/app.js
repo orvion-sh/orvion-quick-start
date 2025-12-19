@@ -421,6 +421,7 @@ async function processPayment() {
         // Try rail_config.extra
         (railConfig.extra && (railConfig.extra.feePayer || railConfig.extra.fee_payer)) ||
         null;
+    console.info('Fee payer selected:', feePayerAddress || 'wallet');
 
     if (!walletPublicKey || !connectedWallet) {
         setPaymentStatus('Connecting wallet...', 'info');
