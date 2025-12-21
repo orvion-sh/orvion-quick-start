@@ -261,6 +261,11 @@ function updatePayButtonState() {
         elements.payBtnText.textContent = 'Connect Wallet & Pay';
         elements.payBtn.classList.remove('wallet-connected');
     }
+    
+    // Make sure button is enabled when updating state (unless explicitly disabled elsewhere)
+    if (elements.payBtn.disabled && !currentCharge) {
+        elements.payBtn.disabled = false;
+    }
 }
 
 // =============================================================================
@@ -310,17 +315,49 @@ async function connectPhantomWallet() {
             elements.connectWalletBtn.textContent = 'Connecting...';
         }
 
-        const resp = await provider.connect();
+        // Use connect() with proper options to avoid errors
+        const resp = await provider.connect({ onlyIfTrusted: false });
         walletPublicKey = resp.publicKey;
         connectedWallet = provider;
         updateWalletUI(walletPublicKey);
         return true;
     } catch (error) {
         console.error('Failed to connect wallet:', error);
+        
+        // Provide user-friendly error messages
+        let errorMessage = 'Failed to connect wallet';
+        if (error.code === 4001) {
+            errorMessage = 'Wallet connection was rejected';
+        } else if (error.message) {
+            // Try to extract meaningful error from message
+            if (error.message.includes('reject') || error.message.includes('denied')) {
+                errorMessage = 'Wallet connection was rejected';
+            } else if (error.message.includes('not installed') || error.message.includes('not found')) {
+                errorMessage = 'Phantom wallet not found. Please install Phantom.';
+            } else {
+                errorMessage = `Wallet error: ${error.message}`;
+            }
+        }
+        
+        // Reset wallet UI state
+        walletPublicKey = null;
+        connectedWallet = null;
+        updateWalletUI(null);
+        
+        // Update connect wallet button
         if (elements.connectWalletBtn) {
             elements.connectWalletBtn.disabled = false;
             elements.connectWalletBtn.innerHTML = '<img src="https://phantom.app/img/phantom-icon-purple.svg" alt="Phantom" class="wallet-icon" onerror="this.style.display=\'none\'"> Connect Wallet';
         }
+        
+        // Update payment button state
+        updatePayButtonState();
+        
+        // Set payment status if we're in payment flow
+        if (elements.paymentStatus && elements.paymentStatus.textContent.includes('Connecting')) {
+            setPaymentStatus(errorMessage, 'error');
+        }
+        
         return false;
     }
 }
@@ -442,9 +479,9 @@ async function processPayment() {
         elements.payBtn.disabled = true;
         const connected = await connectPhantomWallet();
         if (!connected) {
-            setPaymentStatus('Wallet connection required', 'error');
+            setPaymentStatus('Please connect your wallet to continue', 'error');
             elements.payBtn.disabled = false;
-            elements.payBtnText.textContent = 'Pay Now';
+            updatePayButtonState(); // This will set the correct button text based on wallet state
             return;
         }
     }
@@ -550,7 +587,9 @@ async function processPayment() {
 
         if (!processResponse.ok) {
             const errorData = await processResponse.json();
-            throw new Error(errorData.error || 'Payment failed');
+            // Try multiple error message fields for better compatibility
+            const errorMessage = errorData.detail || errorData.message || errorData.error || 'Payment failed';
+            throw new Error(errorMessage);
         }
 
         const processData = await processResponse.json();

@@ -23,7 +23,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 # Add SDK to path for local development (remove in production)
@@ -142,6 +142,11 @@ async def get_config():
 # =============================================================================
 # Static Files & Pages
 # =============================================================================
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Return 204 No Content for favicon requests to prevent 404 errors"""
+    return Response(status_code=204)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
