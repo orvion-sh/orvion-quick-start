@@ -417,7 +417,11 @@ async function createCharge() {
         const data = await response.json();
 
         if (response.status === 200 && data.access === 'granted') {
-            sessionStorage.setItem('premium_txn_id', data.payment?.transaction_id);
+            // Only store transaction_id if it's a valid value
+            const txnId = data.payment?.transaction_id;
+            if (txnId && txnId !== 'undefined') {
+                sessionStorage.setItem('premium_txn_id', txnId);
+            }
             showUnlockedState(data);
             setPaymentStatus('', '');
             return false;
@@ -593,12 +597,18 @@ async function processPayment() {
         }
 
         const processData = await processResponse.json();
-        // ... rest of success handling handled by existing code?
-        // Wait, I am replacing the function, so I need to include success handling.
+        // Handle successful payment response
 
         if (processData.status === 'succeeded' || processData.tx_hash) {
             setPaymentStatus('Payment Confirmed!', 'success');
-            sessionStorage.setItem('premium_txn_id', processData.id);
+            // Use transaction_id (API response field) not id
+            const txnId = processData.transaction_id || processData.id;
+            if (txnId) {
+                sessionStorage.setItem('premium_txn_id', txnId);
+                if (processData.tx_hash) {
+                    sessionStorage.setItem('premium_tx_hash', processData.tx_hash);
+                }
+            }
             location.reload();
         } else {
             setPaymentStatus('Payment submitted but not confirmed yet.', 'warning');
