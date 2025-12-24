@@ -429,6 +429,13 @@ async function createCharge() {
 
         if (response.status === 402) {
             currentCharge = data;
+            // Update price display with actual charge amount
+            if (elements.priceAmount && data.amount) {
+                elements.priceAmount.textContent = `$${parseFloat(data.amount).toFixed(2)}`;
+            }
+            if (elements.priceCurrency && data.currency) {
+                elements.priceCurrency.textContent = data.currency;
+            }
             return true;
         }
 
