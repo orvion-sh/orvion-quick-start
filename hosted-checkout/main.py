@@ -96,7 +96,7 @@ if orvion_client:
 
 @app.get("/api/premium")
 @require_payment(
-    amount="0.01",
+    amount="0.001",  # Reduced for mainnet testing
     currency="USDC",
     name="Premium Content",
     description="Access to premium content",

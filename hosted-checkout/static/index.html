@@ -72,10 +72,10 @@
         <div style="text-align: center; margin: 3rem 0;">
             <a href="/api/premium" class="btn-try">
                 <span></span>
-                <span>Try Hosted Checkout ($0.01 USDC)</span>
+                <span>Try Hosted Checkout ($0.001 USDC)</span>
             </a>
             <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
-                Uses Solana devnet · No real money
+                Uses Solana mainnet · Real USDC payment
             </p>
         </div>
 
@@ -97,7 +97,7 @@
 
 <span class="dec">@</span>app.get(<span class="str">"/api/premium"</span>)
 <span class="dec">@</span>require_payment(
-    amount=<span class="str">"0.01"</span>,
+    amount=<span class="str">"0.001"</span>,
     currency=<span class="str">"USDC"</span>,
     <span class="hl">hosted_checkout=True,</span>
 )
@@ -114,7 +114,7 @@
 
 app.<span class="fn">get</span>(<span class="str">'/api/premium'</span>, 
     <span class="fn">requirePayment</span>({
-        amount: <span class="str">'0.01'</span>,
+        amount: <span class="str">'0.001'</span>,
         currency: <span class="str">'USDC'</span>,
         <span class="hl">hostedCheckout: true,</span>
     }),
@@ -157,7 +157,7 @@ app.<span class="fn">get</span>(<span class="str">'/api/premium'</span>,
     <footer class="demo-footer">
         <p>
             <strong>Orvion Hosted Checkout Demo</strong> ·
-            This demo uses Solana devnet — no real money is transferred.
+            Testing on Solana mainnet with Coinbase CDP facilitator
         </p>
     </footer>
 
