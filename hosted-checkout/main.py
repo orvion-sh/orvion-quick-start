@@ -19,10 +19,12 @@ Then visit: http://localhost:5002
 import os
 import sys
 from contextlib import asynccontextmanager
+from decimal import Decimal
 from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -44,6 +46,26 @@ load_dotenv()
 
 ORVION_API_KEY = os.getenv("ORVION_API_KEY", "")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+
+
+# =============================================================================
+# JSON Serialization Fix for Decimal Types
+# =============================================================================
+
+def _custom_jsonable_encoder(obj, **kwargs):
+    """Custom JSON encoder that handles Decimal types."""
+    # Use FastAPI's default encoder but add Decimal support
+    custom_encoder = {Decimal: str}
+    if "custom_encoder" in kwargs:
+        kwargs["custom_encoder"].update(custom_encoder)
+    else:
+        kwargs["custom_encoder"] = custom_encoder
+    return jsonable_encoder(obj, **kwargs)
+
+
+# Patch FastAPI's jsonable_encoder to handle Decimal types globally
+import fastapi.encoders
+fastapi.encoders.jsonable_encoder = _custom_jsonable_encoder
 
 # Create single client instance
 orvion_client: Optional[OrvionClient] = None

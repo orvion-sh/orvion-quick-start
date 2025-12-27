@@ -135,16 +135,29 @@
         } else if (chargeId) {
             // Fetch charge details to get tx_hash
             fetch(`/api/payments/charge/${chargeId}`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        // Handle 404 or other errors gracefully
+                        if (response.status === 404) {
+                            console.warn('Charge not found, payment may still be processing');
+                            document.getElementById('tx-hash-row').style.display = 'none';
+                            return null;
+                        }
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    if (data.tx_hash) {
+                    if (data && data.tx_hash) {
                         updateTxHashDisplay(data.tx_hash);
                     } else {
+                        // No tx_hash yet - payment might still be processing
                         document.getElementById('tx-hash-row').style.display = 'none';
                     }
                 })
                 .catch(err => {
                     console.error('Failed to fetch charge details:', err);
+                    // Silently hide tx_hash row instead of showing error
                     document.getElementById('tx-hash-row').style.display = 'none';
                 });
         } else {
