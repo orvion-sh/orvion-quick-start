@@ -3,4 +3,4 @@ fastapi>=0.100.0
 uvicorn>=0.23.0
 python-dotenv>=1.0.0
 httpx>=0.24.0
-orvion>=0.2.0
+orvion>=0.4.0

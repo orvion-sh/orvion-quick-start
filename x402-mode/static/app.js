@@ -582,13 +582,10 @@ async function processPayment() {
             legacyTransaction: txBase58, // Optional helper field; backend will prefer base64
         };
 
-        // #region agent log
         const requestBody = {
             transaction_id: currentCharge.charge_id || currentCharge.id, // Support both charge_id and id
-            payment_payload: paymentPayload, // Fixed: changed from payment_signature to payment_payload, removed JSON.stringify
+            payment_payload: paymentPayload,
         };
-        fetch('http://127.0.0.1:7242/ingest/7b2f239b-2833-47cc-95b9-48b229d0abb6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:523',message:'Sending payment request',data:{transaction_id:requestBody.transaction_id,has_payment_payload:!!requestBody.payment_payload,payment_payload_type:typeof requestBody.payment_payload,payment_payload_keys:requestBody.payment_payload?Object.keys(requestBody.payment_payload):null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
 
         const processResponse = await fetch('/api/payments/process', {
             method: 'POST',
