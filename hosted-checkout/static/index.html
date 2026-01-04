@@ -68,15 +68,38 @@
             </div>
         </div>
 
-        <!-- Try It Button -->
+        <!-- Try It Buttons -->
         <div style="text-align: center; margin: 3rem 0;">
-            <a href="/api/premium" class="btn-try">
-                <span></span>
-                <span>Try Hosted Checkout ($0.001 USDC)</span>
-            </a>
-            <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
-                Uses Solana mainnet · Real USDC payment
-            </p>
+            <!-- Option 1: Simple Charge -->
+            <div style="margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 0.5rem;">Option 1: Simple Charge</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    Fixed price endpoint using default payment config.
+                </p>
+                <a href="/api/premium" class="btn-try">
+                    <span>💰</span>
+                    <span>Try /api/premium ($0.001 USDC)</span>
+                </a>
+                <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">
+                    Uses default receiver config · No routing flow
+                </p>
+            </div>
+            
+            <!-- Option 2: With Routing Flow -->
+            <div style="border-top: 1px solid var(--border-light); padding-top: 2rem;">
+                <h3 style="margin-bottom: 0.5rem;">Option 2: With Routing Flow</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    Uses your <strong>routing flow</strong> to determine payment configuration.
+                    The flow can apply conditions, select receivers, and route payments dynamically.
+                </p>
+                <a href="/api/flow" class="btn-try" style="background: #667eea;">
+                    <span>🔀</span>
+                    <span>Try /api/flow ($0.001 USDC)</span>
+                </a>
+                <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">
+                    Executes routing flow with <code>api_request_entry</code> node
+                </p>
+            </div>
         </div>
 
         <!-- Code Example -->

@@ -113,31 +113,67 @@ if orvion_client:
 
 
 # =============================================================================
-# Protected Endpoint with Hosted Checkout
+# Option 1: Simple Protected Route (No Routing Flow)
 # =============================================================================
 
 @app.get("/api/premium")
 @require_payment(
-    amount="0.001",  # Reduced for mainnet testing
+    amount="0.001",
     currency="USDC",
     name="Premium Content",
-    description="Access to premium content",
-    hosted_checkout=True,  # <-- This is all you need!
-    # return_url is auto-derived: /api/premium → /premium
+    description="Access to premium content - simple charge",
+    hosted_checkout=True,
+    # No routing flow - uses default receiver config directly
 )
 async def premium_api(request: Request):
     """
-    Payment-protected endpoint using hosted checkout.
-
-    Without payment: Redirects to pay.orvion.sh
-    After payment: Returns the premium content
+    Simple payment-protected endpoint.
+    
+    - Uses default receiver config for payment
+    - Does NOT execute routing flow
+    - Good for: Simple single-price endpoints
     """
     payment = getattr(request.state, "payment", None)
 
     return {
         "access": "granted",
         "message": "Welcome to premium content!",
-        "mode": "hosted_checkout",
+        "mode": "simple_charge",
+        "payment": {
+            "transaction_id": payment.transaction_id if payment else None,
+            "amount": payment.amount if payment else None,
+            "currency": payment.currency if payment else None,
+        } if payment else None,
+    }
+
+
+# =============================================================================
+# Option 2: Protected Route with Routing Flow
+# =============================================================================
+
+@app.get("/api/flow")
+@require_payment(
+    amount="0.001",
+    currency="USDC",
+    name="Flow-Routed Content",
+    description="Access to content - uses routing flow for payment config",
+    hosted_checkout=True,
+    # This triggers routing flow with 'api_request_entry' node
+)
+async def flow_api(request: Request):
+    """
+    Payment-protected endpoint that uses ROUTING FLOW.
+    
+    - Executes active routing flow with 'api_request_entry' node
+    - Routing flow determines: receiver config, conditions, etc.
+    - Good for: Dynamic pricing, A/B testing, conditional routing
+    """
+    payment = getattr(request.state, "payment", None)
+
+    return {
+        "access": "granted",
+        "message": "Welcome! Payment was routed through your flow.",
+        "mode": "routing_flow",
         "payment": {
             "transaction_id": payment.transaction_id if payment else None,
             "amount": payment.amount if payment else None,
@@ -175,7 +211,13 @@ async def serve_index():
 
 @app.get("/premium")
 async def serve_premium():
-    """Premium content page (user lands here after payment)"""
+    """Success page after /api/premium payment"""
+    return FileResponse("static/premium.html")
+
+
+@app.get("/flow")
+async def serve_flow_success():
+    """Success page after /api/flow payment"""
     return FileResponse("static/premium.html")
 
 
