@@ -87,17 +87,25 @@
             
             <!-- Option 2: With Routing Flow -->
             <div style="border-top: 1px solid var(--border-light); padding-top: 2rem;">
-                <h3 style="margin-bottom: 0.5rem;">Option 2: With Routing Flow</h3>
+                <h3 style="margin-bottom: 0.5rem;">Option 2: With Billing Flow</h3>
                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    Uses your <strong>routing flow</strong> to determine payment configuration.
-                    The flow can apply conditions, select receivers, and route payments dynamically.
+                    Select a <strong>billing flow</strong> to use its payment configuration (network, asset, receiver).
                 </p>
-                <a href="/api/flow" class="btn-try" style="background: #667eea;">
-                    <span>🔀</span>
-                    <span>Try /api/flow ($0.001 USDC)</span>
-                </a>
+                
+                <!-- Flow Selector -->
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 1rem; max-width: 400px; margin: 0 auto;">
+                    <select id="flow-selector" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-light); font-size: 1rem; background: var(--bg-primary);">
+                        <option value="">Loading flows...</option>
+                    </select>
+                    
+                    <button id="try-flow-btn" class="btn-try" style="width: 100%; background: #667eea;" onclick="trySelectedFlow()">
+                        <span>🔀</span>
+                        <span>Try Selected Flow</span>
+                    </button>
+                </div>
+                
                 <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">
-                    Executes routing flow with <code>api_request_entry</code> node
+                    Creates a charge using the selected flow's payment config
                 </p>
             </div>
         </div>
@@ -199,6 +207,64 @@ app.<span class="fn">get</span>(<span class="str">'/api/premium'</span>,
                 document.getElementById(`${lang}-code`)?.classList.add('active');
             });
         });
+
+        // Load billing flows on page load
+        async function loadFlows() {
+            const selector = document.getElementById('flow-selector');
+            
+            try {
+                const response = await fetch('/api/flows');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.warn('Failed to load flows:', data.error);
+                    selector.innerHTML = '<option value="">Failed to load flows</option>';
+                    return;
+                }
+                
+                // Clear and add default option
+                selector.innerHTML = '<option value="">-- Select a flow --</option>';
+                
+                if (data.flows && data.flows.length > 0) {
+                    // Add each flow as an option
+                    data.flows.forEach(flow => {
+                        const option = document.createElement('option');
+                        option.value = flow.slug || flow.id;
+                        
+                        const name = flow.name || flow.slug || flow.id;
+                        const network = flow.network || 'unknown';
+                        const asset = flow.asset || 'USDC';
+                        const active = flow.is_active ? '' : ' [inactive]';
+                        
+                        option.textContent = `${name} (${network} / ${asset})${active}`;
+                        
+                        selector.appendChild(option);
+                    });
+                } else {
+                    selector.innerHTML = '<option value="">No flows found</option>';
+                }
+            } catch (error) {
+                console.error('Failed to load flows:', error);
+                selector.innerHTML = '<option value="">Error loading flows</option>';
+            }
+        }
+
+        // Navigate to checkout with selected flow
+        function trySelectedFlow() {
+            const selector = document.getElementById('flow-selector');
+            const selectedFlow = selector.value;
+            
+            if (!selectedFlow) {
+                alert('Please select a flow first');
+                return;
+            }
+            
+            // Redirect to checkout endpoint with flow_slug
+            window.location.href = `/api/checkout?flow_slug=${encodeURIComponent(selectedFlow)}&amount=0.001`;
+        }
+
+        // Load flows when page loads
+        document.addEventListener('DOMContentLoaded', loadFlows);
     </script>
 </body>
 

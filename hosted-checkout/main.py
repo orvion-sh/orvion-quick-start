@@ -23,9 +23,9 @@ from decimal import Decimal
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 # Add SDK to path for local development (remove in production)
@@ -180,6 +180,95 @@ async def flow_api(request: Request):
             "currency": payment.currency if payment else None,
         } if payment else None,
     }
+
+
+# =============================================================================
+# List Flows (for dropdown)
+# =============================================================================
+
+@app.get("/api/flows")
+async def list_flows():
+    """
+    List all billing flows from Orvion.
+    Used by the demo UI to show available flows.
+    """
+    if not orvion_client:
+        return {"flows": [], "error": "Orvion client not configured"}
+    
+    try:
+        # Fetch billing flows from Orvion API
+        flows = await orvion_client._request("GET", "/v1/flows")
+        
+        # Return simplified flow list
+        result = []
+        for flow in flows if isinstance(flows, list) else []:
+            result.append({
+                "id": flow.get("id"),
+                "slug": flow.get("slug"),
+                "name": flow.get("name"),
+                "network": flow.get("network"),
+                "asset": flow.get("asset"),
+                "is_active": flow.get("is_active", False),
+            })
+        
+        return {"flows": result}
+    except Exception as e:
+        return {"flows": [], "error": str(e)}
+
+
+# =============================================================================
+# Checkout with Flow
+# =============================================================================
+
+@app.get("/api/checkout")
+async def checkout_with_flow(
+    request: Request,
+    flow_slug: str,
+    amount: str = "0.001",
+    currency: str = "USDC",
+):
+    """
+    Create a charge using a billing flow and redirect to checkout.
+    
+    Query params:
+    - flow_slug: The billing flow slug (e.g., 'flow_a3xK9mPq')
+    - amount: Charge amount (default: 0.001)
+    - currency: Currency (default: USDC)
+    """
+    if not orvion_client:
+        raise HTTPException(status_code=500, detail="Orvion client not configured")
+    
+    try:
+        # Build return URL
+        base_url = str(request.base_url).rstrip("/")
+        return_url = f"{base_url}/premium"
+        
+        # Create charge with flow_slug
+        charge = await orvion_client._request(
+            "POST",
+            "/v1/charges",
+            json={
+                "amount": amount,
+                "currency": currency,
+                "customer_ref": "demo-user",
+                "return_url": return_url,
+                "flow_slug": flow_slug,
+            }
+        )
+        
+        checkout_url = charge.get("checkout_url")
+        if not checkout_url:
+            raise HTTPException(
+                status_code=500,
+                detail="No checkout URL returned. Check flow configuration."
+            )
+        
+        # Redirect to checkout
+        return RedirectResponse(url=checkout_url, status_code=302)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create charge: {str(e)}")
 
 
 # =============================================================================
