@@ -11,6 +11,7 @@ This demo showcases the **hosted checkout** flow, where:
 - ✅ **Web applications** - No wallet UI to build
 - ✅ **Quick integration** - Just add one parameter
 - ✅ **Zero frontend code** - Orvion handles everything
+- ✅ **Routing flows** - Dynamic pricing and conditional routing support
 
 ## Quick Start
 
@@ -33,10 +34,14 @@ Then visit: **http://localhost:5002**
 ### Server Code (Just add `hosted_checkout=True`!)
 
 ```python
+from orvion import OrvionClient
 from orvion.fastapi import OrvionMiddleware, require_payment
 
-app.add_middleware(OrvionMiddleware, api_key=os.environ["ORVION_API_KEY"])
+# Create client and add middleware
+orvion_client = OrvionClient(api_key=os.environ["ORVION_API_KEY"])
+app.add_middleware(OrvionMiddleware, client=orvion_client)
 
+# Simple hosted checkout
 @app.get("/api/premium")
 @require_payment(
     amount="0.01",
@@ -45,6 +50,16 @@ app.add_middleware(OrvionMiddleware, api_key=os.environ["ORVION_API_KEY"])
 )
 async def premium(request):
     return {"content": "Premium data!"}
+
+# With routing flow (for dynamic pricing)
+@app.get("/api/flow")
+@require_payment(
+    amount="0.01",
+    currency="USDC",
+    hosted_checkout=True,  # Uses active routing flow
+)
+async def flow_api(request):
+    return {"content": "Flow-routed content!"}
 ```
 
 ### Payment Flow

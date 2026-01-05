@@ -5,8 +5,8 @@ Orvion enables x402 payment-protected APIs with Solana payments. These demos sho
 ## Quickstart
 
 ```bash
-git clone https://github.com/orvion-sh/quick-start.git
-cd quick-start/x402-mode
+git clone https://github.com/orvion-sh/orvion-quick-start.git
+cd orvion-quick-start/x402-mode
 cp .env.example .env
 # Edit .env with your API key from orvion.sh/dashboard
 pip install -r requirements.txt
@@ -72,7 +72,7 @@ pip install -r requirements.txt
 
 This will install:
 - FastAPI and Uvicorn (web framework)
-- The Orvion SDK (`orvion>=0.2.0,<1.0.0`) from PyPI
+- The Orvion SDK (`orvion>=0.4.0`) from PyPI
 
 ### 4. Run the Demo
 
@@ -94,10 +94,12 @@ Get free devnet SOL/USDC at: [faucet.solana.com](https://faucet.solana.com/)
 Both demos use the same `@require_payment` decorator - just one parameter different!
 
 ```python
+from orvion import OrvionClient
 from orvion.fastapi import OrvionMiddleware, require_payment
 
-# Add middleware (same for both)
-app.add_middleware(OrvionMiddleware, api_key=os.environ["ORVION_API_KEY"])
+# Create client and add middleware
+orvion_client = OrvionClient(api_key=os.environ["ORVION_API_KEY"])
+app.add_middleware(OrvionMiddleware, client=orvion_client)
 
 # x402 Mode (default)
 @app.get("/api/premium")

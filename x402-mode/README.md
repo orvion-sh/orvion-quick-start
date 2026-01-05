@@ -30,13 +30,17 @@ Then visit: **http://localhost:5001**
 
 ## How It Works
 
-### Server Code (3 lines!)
+### Server Code
 
 ```python
+from orvion import OrvionClient
 from orvion.fastapi import OrvionMiddleware, require_payment
 
-app.add_middleware(OrvionMiddleware, api_key=os.environ["ORVION_API_KEY"])
+# Create client and add middleware
+orvion_client = OrvionClient(api_key=os.environ["ORVION_API_KEY"])
+app.add_middleware(OrvionMiddleware, client=orvion_client)
 
+# Protected endpoint
 @app.get("/api/premium")
 @require_payment(amount="0.01", currency="USDC")
 async def premium(request):
