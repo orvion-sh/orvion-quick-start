@@ -229,7 +229,7 @@ async def checkout_with_route(
     route_id: str,
 ):
     """
-    Create a charge using a protected route and redirect to checkout.
+    Create a checkout session for a protected route and redirect to checkout.
     
     Query params:
     - route_id: The protected route ID (e.g., 'route_abc123')
@@ -240,13 +240,9 @@ async def checkout_with_route(
         raise HTTPException(status_code=500, detail="Orvion client not configured")
     
     try:
-        # Fetch the route to get its amount, currency, and receiver_config_id
-        routes = await orvion_client._request("GET", "/v1/protected-routes/routes")
-        
-        # Find the route by ID
-        route = None
-        if isinstance(routes, list):
-            route = next((r for r in routes if r.get("id") == route_id), None)
+        # Fetch routes to find the selected one
+        routes = await orvion_client.get_routes()
+        route = next((r for r in routes if r.id == route_id), None)
         
         if not route:
             raise HTTPException(
@@ -255,60 +251,31 @@ async def checkout_with_route(
             )
         
         # Check if route is active
-        route_status = route.get("status", "active")
+        route_status = getattr(route, "status", "active")
         if route_status != "active":
             raise HTTPException(
                 status_code=400,
                 detail=f"Protected route '{route_id}' is not active (status: {route_status})"
             )
         
-        # Extract route configuration
-        amount = route.get("amount")
-        currency = route.get("currency", "USDC")
-        receiver_config_id = route.get("receiver_config_id")
-        
-        if not amount:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Protected route '{route_id}' has no amount configured"
-            )
-        
         # Build return URL
         base_url = str(request.base_url).rstrip("/")
         return_url = f"{base_url}/premium"
         
-        # Create charge payload
-        charge_payload = {
-            "amount": str(amount),
-            "currency": currency,
-            "customer_ref": "demo-user",
-            "return_url": return_url,
-        }
-        
-        # Add receiver_config_id if the route has one
-        if receiver_config_id:
-            charge_payload["receiver_config_id"] = receiver_config_id
-        
-        # Create charge
-        charge = await orvion_client._request(
-            "POST",
-            "/v1/charges",
-            json=charge_payload
+        # Create checkout session using SDK convenience method
+        session = await orvion_client.create_checkout_session(
+            amount=route.amount,
+            currency=route.currency,
+            return_url=return_url,
+            receiver_config_id=route.receiver_config_id,
         )
         
-        checkout_url = charge.get("checkout_url")
-        if not checkout_url:
-            raise HTTPException(
-                status_code=500,
-                detail="No checkout URL returned. Check route configuration."
-            )
-        
         # Redirect to checkout
-        return RedirectResponse(url=checkout_url, status_code=302)
+        return RedirectResponse(url=session.checkout_url, status_code=302)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create charge: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {str(e)}")
 
 
 # =============================================================================
