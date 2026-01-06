@@ -153,7 +153,7 @@ async def premium_api(request: Request):
 
 @app.get("/api/flow")
 @require_payment(
-    amount="0.001",
+    amount="0.0015",
     currency="USDC",
     name="Flow-Routed Content",
     description="Access to content - uses routing flow for payment config",
@@ -183,84 +183,124 @@ async def flow_api(request: Request):
 
 
 # =============================================================================
-# List Flows (for dropdown)
+# List Protected Routes (for dropdown)
 # =============================================================================
 
-@app.get("/api/flows")
-async def list_flows():
+@app.get("/api/routes")
+async def list_routes():
     """
-    List all billing flows from Orvion.
-    Used by the demo UI to show available flows.
+    List all protected routes from Orvion.
+    Used by the demo UI to show available routes with their amounts.
     """
     if not orvion_client:
-        return {"flows": [], "error": "Orvion client not configured"}
+        return {"routes": [], "error": "Orvion client not configured"}
     
     try:
-        # Fetch billing flows from Orvion API
-        flows = await orvion_client._request("GET", "/v1/flows")
+        # Fetch protected routes from Orvion API
+        routes = await orvion_client._request("GET", "/v1/protected-routes/routes")
         
-        # Return simplified flow list
+        # Return simplified route list
         result = []
-        for flow in flows if isinstance(flows, list) else []:
+        for route in routes if isinstance(routes, list) else []:
             result.append({
-                "id": flow.get("id"),
-                "slug": flow.get("slug"),
-                "name": flow.get("name"),
-                "network": flow.get("network"),
-                "asset": flow.get("asset"),
-                "is_active": flow.get("is_active", False),
+                "id": route.get("id"),
+                "route_pattern": route.get("route_pattern"),
+                "method": route.get("method"),
+                "amount": route.get("amount"),
+                "currency": route.get("currency"),
+                "name": route.get("name"),
+                "description": route.get("description"),
+                "status": route.get("status", "active"),
+                "receiver_config_id": route.get("receiver_config_id"),
             })
         
-        return {"flows": result}
+        return {"routes": result}
     except Exception as e:
-        return {"flows": [], "error": str(e)}
+        return {"routes": [], "error": str(e)}
 
 
 # =============================================================================
-# Checkout with Flow
+# Checkout with Protected Route
 # =============================================================================
 
 @app.get("/api/checkout")
-async def checkout_with_flow(
+async def checkout_with_route(
     request: Request,
-    flow_slug: str,
-    amount: str = "0.001",
-    currency: str = "USDC",
+    route_id: str,
 ):
     """
-    Create a charge using a billing flow and redirect to checkout.
+    Create a charge using a protected route and redirect to checkout.
     
     Query params:
-    - flow_slug: The billing flow slug (e.g., 'flow_a3xK9mPq')
-    - amount: Charge amount (default: 0.001)
-    - currency: Currency (default: USDC)
+    - route_id: The protected route ID (e.g., 'route_abc123')
+    
+    The route's amount, currency, and receiver_config_id are used automatically.
     """
     if not orvion_client:
         raise HTTPException(status_code=500, detail="Orvion client not configured")
     
     try:
+        # Fetch the route to get its amount, currency, and receiver_config_id
+        routes = await orvion_client._request("GET", "/v1/protected-routes/routes")
+        
+        # Find the route by ID
+        route = None
+        if isinstance(routes, list):
+            route = next((r for r in routes if r.get("id") == route_id), None)
+        
+        if not route:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Protected route '{route_id}' not found"
+            )
+        
+        # Check if route is active
+        route_status = route.get("status", "active")
+        if route_status != "active":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Protected route '{route_id}' is not active (status: {route_status})"
+            )
+        
+        # Extract route configuration
+        amount = route.get("amount")
+        currency = route.get("currency", "USDC")
+        receiver_config_id = route.get("receiver_config_id")
+        
+        if not amount:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Protected route '{route_id}' has no amount configured"
+            )
+        
         # Build return URL
         base_url = str(request.base_url).rstrip("/")
         return_url = f"{base_url}/premium"
         
-        # Create charge with flow_slug
+        # Create charge payload
+        charge_payload = {
+            "amount": str(amount),
+            "currency": currency,
+            "customer_ref": "demo-user",
+            "return_url": return_url,
+        }
+        
+        # Add receiver_config_id if the route has one
+        if receiver_config_id:
+            charge_payload["receiver_config_id"] = receiver_config_id
+        
+        # Create charge
         charge = await orvion_client._request(
             "POST",
             "/v1/charges",
-            json={
-                "amount": amount,
-                "currency": currency,
-                "customer_ref": "demo-user",
-                "return_url": return_url,
-                "flow_slug": flow_slug,
-            }
+            json=charge_payload
         )
         
         checkout_url = charge.get("checkout_url")
         if not checkout_url:
             raise HTTPException(
                 status_code=500,
-                detail="No checkout URL returned. Check flow configuration."
+                detail="No checkout URL returned. Check route configuration."
             )
         
         # Redirect to checkout

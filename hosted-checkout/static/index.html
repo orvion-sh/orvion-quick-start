@@ -68,44 +68,51 @@
             </div>
         </div>
 
-        <!-- Try It Buttons -->
+        <!-- Try It -->
         <div style="text-align: center; margin: 3rem 0;">
-            <!-- Option 1: Simple Charge -->
-            <div style="margin-bottom: 2rem;">
-                <h3 style="margin-bottom: 0.5rem;">Option 1: Simple Charge</h3>
+            <div>
+                <h3 style="margin-bottom: 0.5rem;">Try a Protected Route</h3>
                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    Fixed price endpoint using default payment config.
-                </p>
-                <a href="/api/premium" class="btn-try">
-                    <span>💰</span>
-                    <span>Try /api/premium ($0.001 USDC)</span>
-                </a>
-                <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">
-                    Uses default receiver config · No routing flow
-                </p>
-            </div>
-            
-            <!-- Option 2: With Routing Flow -->
-            <div style="border-top: 1px solid var(--border-light); padding-top: 2rem;">
-                <h3 style="margin-bottom: 0.5rem;">Option 2: With Billing Flow</h3>
-                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    Select a <strong>billing flow</strong> to use its payment configuration (network, asset, receiver).
+                    Select a <strong>protected route</strong> to test the hosted checkout flow. Each route has its own amount and payment configuration.
                 </p>
                 
-                <!-- Flow Selector -->
-                <div style="display: flex; flex-direction: column; align-items: center; gap: 1rem; max-width: 400px; margin: 0 auto;">
-                    <select id="flow-selector" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-light); font-size: 1rem; background: var(--bg-primary);">
-                        <option value="">Loading flows...</option>
+                <!-- Route Selector -->
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 1rem; max-width: 400px; margin: 0 auto; position: relative; z-index: 1;">
+                    <select id="route-selector" style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-light); font-size: 1rem; background: var(--bg-primary); color: var(--text-primary); cursor: pointer; appearance: auto; -webkit-appearance: menulist; -moz-appearance: menulist;">
+                        <option value="">Loading routes...</option>
                     </select>
+                    <style>
+                        #route-selector {
+                            background-color: #ffffff !important;
+                            color: #0f172a !important;
+                            position: relative;
+                            z-index: 10;
+                        }
+                        #route-selector option {
+                            background-color: #ffffff !important;
+                            color: #0f172a !important;
+                            padding: 0.75rem !important;
+                            display: block !important;
+                        }
+                        #route-selector:focus {
+                            outline: 2px solid var(--accent-primary);
+                            outline-offset: 2px;
+                            border-color: var(--accent-primary);
+                            z-index: 100;
+                        }
+                        #route-selector:hover {
+                            border-color: var(--accent-primary);
+                        }
+                    </style>
                     
-                    <button id="try-flow-btn" class="btn-try" style="width: 100%; background: #667eea;" onclick="trySelectedFlow()">
+                    <button id="try-route-btn" class="btn-try" style="width: 100%; background: #667eea;" onclick="trySelectedRoute()">
                         <span>🔀</span>
-                        <span>Try Selected Flow</span>
+                        <span>Try Selected Route</span>
                     </button>
                 </div>
                 
                 <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">
-                    Creates a charge using the selected flow's payment config
+                    Creates a charge using the selected route's amount and payment config
                 </p>
             </div>
         </div>
@@ -208,63 +215,94 @@ app.<span class="fn">get</span>(<span class="str">'/api/premium'</span>,
             });
         });
 
-        // Load billing flows on page load
-        async function loadFlows() {
-            const selector = document.getElementById('flow-selector');
+        // Format amount with up to 6 decimal places, removing trailing zeros
+        function formatAmount(amount) {
+            if (!amount) return '0';
+            const num = parseFloat(amount);
+            if (isNaN(num)) return String(amount);
+            if (num === 0) return '0';
+            
+            // Format with up to 6 decimal places, then remove trailing zeros
+            const formatted = num.toFixed(6);
+            return formatted.replace(/\.?0+$/, '') || '0';
+        }
+
+        // Load protected routes on page load
+        async function loadRoutes() {
+            const selector = document.getElementById('route-selector');
             
             try {
-                const response = await fetch('/api/flows');
+                const response = await fetch('/api/routes');
                 const data = await response.json();
                 
                 if (data.error) {
-                    console.warn('Failed to load flows:', data.error);
-                    selector.innerHTML = '<option value="">Failed to load flows</option>';
+                    console.warn('Failed to load routes:', data.error);
+                    selector.innerHTML = '<option value="">Failed to load routes</option>';
                     return;
                 }
                 
                 // Clear and add default option
-                selector.innerHTML = '<option value="">-- Select a flow --</option>';
+                selector.innerHTML = '<option value="">-- Select a route --</option>';
                 
-                if (data.flows && data.flows.length > 0) {
-                    // Add each flow as an option
-                    data.flows.forEach(flow => {
+                if (data.routes && data.routes.length > 0) {
+                    // Filter to only active routes
+                    const activeRoutes = data.routes.filter(route => route.status === 'active');
+                    
+                    console.log('Loaded routes:', data.routes);
+                    console.log('Active routes:', activeRoutes);
+                    
+                    if (activeRoutes.length === 0) {
+                        selector.innerHTML = '<option value="">No active routes found</option>';
+                        return;
+                    }
+                    
+                    // Clear existing options first
+                    selector.innerHTML = '<option value="">-- Select a route --</option>';
+                    
+                    // Add each route as an option
+                    activeRoutes.forEach(route => {
                         const option = document.createElement('option');
-                        option.value = flow.slug || flow.id;
+                        option.value = route.id;
                         
-                        const name = flow.name || flow.slug || flow.id;
-                        const network = flow.network || 'unknown';
-                        const asset = flow.asset || 'USDC';
-                        const active = flow.is_active ? '' : ' [inactive]';
+                        const pattern = route.route_pattern || route.id;
+                        const method = route.method || '*';
+                        const amount = formatAmount(route.amount || '0');
+                        const currency = route.currency || 'USDC';
+                        const name = route.name ? ` - ${route.name}` : '';
                         
-                        option.textContent = `${name} (${network} / ${asset})${active}`;
+                        option.textContent = `${method} ${pattern} - ${amount} ${currency}${name}`;
+                        option.style.backgroundColor = '#ffffff';
+                        option.style.color = '#0f172a';
                         
                         selector.appendChild(option);
                     });
+                    
+                    console.log('Options added to select:', selector.options.length);
                 } else {
-                    selector.innerHTML = '<option value="">No flows found</option>';
+                    selector.innerHTML = '<option value="">No routes found</option>';
                 }
             } catch (error) {
-                console.error('Failed to load flows:', error);
-                selector.innerHTML = '<option value="">Error loading flows</option>';
+                console.error('Failed to load routes:', error);
+                selector.innerHTML = '<option value="">Error loading routes</option>';
             }
         }
 
-        // Navigate to checkout with selected flow
-        function trySelectedFlow() {
-            const selector = document.getElementById('flow-selector');
-            const selectedFlow = selector.value;
+        // Navigate to checkout with selected route
+        function trySelectedRoute() {
+            const selector = document.getElementById('route-selector');
+            const selectedRouteId = selector.value;
             
-            if (!selectedFlow) {
-                alert('Please select a flow first');
+            if (!selectedRouteId) {
+                alert('Please select a route first');
                 return;
             }
             
-            // Redirect to checkout endpoint with flow_slug
-            window.location.href = `/api/checkout?flow_slug=${encodeURIComponent(selectedFlow)}&amount=0.001`;
+            // Redirect to checkout endpoint with route_id (no hardcoded amount)
+            window.location.href = `/api/checkout?route_id=${encodeURIComponent(selectedRouteId)}`;
         }
 
-        // Load flows when page loads
-        document.addEventListener('DOMContentLoaded', loadFlows);
+        // Load routes when page loads
+        document.addEventListener('DOMContentLoaded', loadRoutes);
     </script>
 </body>
 
