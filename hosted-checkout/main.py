@@ -29,17 +29,28 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 # Add SDK to path for local development (remove in production)
+# This allows importing the SDK from the local sdk/python directory
 sdk_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "sdk", "python")
 if sdk_path not in sys.path:
     sys.path.insert(0, sdk_path)
 
-from orvion import OrvionClient
-from orvion.fastapi import (
-    OrvionMiddleware,
-    create_payment_router,
-    require_payment,
-    sync_routes,
-)
+# Import after path manipulation
+try:
+    from orvion import OrvionClient  # type: ignore
+    from orvion.fastapi import (  # type: ignore
+        OrvionMiddleware,
+        create_payment_router,
+        require_payment,
+        sync_routes,
+    )
+except ImportError as e:
+    print(f"❌ Failed to import Orvion SDK: {e}")
+    print(f"   SDK path: {sdk_path}")
+    print(f"   Python path: {sys.path[:3]}")
+    print("\n   To fix:")
+    print("   1. Install SDK: pip install -e ../../sdk/python")
+    print("   2. Or ensure SDK is in requirements.txt and installed")
+    raise
 
 # Load environment variables
 load_dotenv()
@@ -88,8 +99,16 @@ async def lifespan(app: FastAPI):
         try:
             registered_count = await sync_routes(app, orvion_client)
             print(f"✓ Registered {registered_count} protected route(s)")
+            
+            # Verify routes were registered with flow_slug
+            routes = await orvion_client.get_routes()
+            for route in routes:
+                flow_info = f" (flow: {route.flow_slug})" if route.flow_slug else " (no flow)"
+                print(f"  - {route.method} {route.route_pattern}: {route.amount} {route.currency}{flow_info}")
         except Exception as e:
             print(f"⚠ Route registration failed: {e}")
+            import traceback
+            traceback.print_exc()
     else:
         print("⚠ No ORVION_API_KEY set")
 
@@ -121,16 +140,15 @@ if orvion_client:
     amount="0.001",
     currency="USDC",
     name="Premium Content",
-    description="Access to premium content - simple charge",
+    description="Access to premium content - standalone charge",
     hosted_checkout=True,
-    # No routing flow - uses default receiver config directly
+    # No flow_slug - uses standalone charge with receiver_config fallback
 )
 async def premium_api(request: Request):
     """
-    Simple payment-protected endpoint.
+    Simple payment-protected endpoint using STANDALONE CHARGE.
     
-    - Uses default receiver config for payment
-    - Does NOT execute routing flow
+    - No flow_slug = uses receiver_config_id or default receiver config
     - Good for: Simple single-price endpoints
     """
     payment = getattr(request.state, "payment", None)
@@ -156,17 +174,19 @@ async def premium_api(request: Request):
     amount="0.0015",
     currency="USDC",
     name="Flow-Routed Content",
-    description="Access to content - uses routing flow for payment config",
+    description="Access to content - uses flow for x402 configuration",
     hosted_checkout=True,
-    # This triggers routing flow with 'api_request_entry' node
+    flow_slug="flow_bygKf6iG",
 )
 async def flow_api(request: Request):
     """
-    Payment-protected endpoint that uses ROUTING FLOW.
+    Payment-protected endpoint that uses a BILLING FLOW.
     
-    - Executes active routing flow with 'api_request_entry' node
-    - Routing flow determines: receiver config, conditions, etc.
-    - Good for: Dynamic pricing, A/B testing, conditional routing
+    - Set flow_slug in decorator OR configure it in the dashboard
+    - Flow determines: network, asset, pay_to_address, escrow, facilitator
+    - Good for: Different payment configurations per route
+    
+    Note: If no flow_slug is set, it uses standalone charge (receiver_config fallback).
     """
     payment = getattr(request.state, "payment", None)
 
@@ -268,7 +288,12 @@ async def checkout_with_route(
             currency=route.currency,
             return_url=return_url,
             receiver_config_id=route.receiver_config_id,
+            flow_slug=route.flow_slug,  # Pass flow_slug from route
+            resource_ref=f"protected_route:{route.id}",  # Set resource_ref for route tracking
         )
+        
+        # Redirect to checkout
+        return RedirectResponse(url=session.checkout_url, status_code=302)
         
         # Redirect to checkout
         return RedirectResponse(url=session.checkout_url, status_code=302)
